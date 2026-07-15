@@ -1,0 +1,14 @@
+{
+  "timestamp": "20260715_141040",
+  "source_pdf": "July-09.pdf",
+  "pages_processed": 26,
+  "pages_flagged": 26,
+  "pages_autobuilt": 0,
+  "total_procedures": 0,
+  "total_diagnoses": 0,
+  "total_notes": 0,
+  "flag_counts": {
+    "extraction_failed": 26,
+    "blank_header": 26
+  }
+}

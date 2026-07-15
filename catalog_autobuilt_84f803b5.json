@@ -1,0 +1,36 @@
+{
+  "template_id": "autobuilt_84f803b5",
+  "version": 1,
+  "source": "auto-built from page-17.png p1",
+  "status": "active",
+  "fingerprint": {
+    "header_labels": [
+      "Therapeutic Injections",
+      "Labs",
+      "Office Services",
+      "Cardiovascular",
+      "CNS",
+      "Dermatology",
+      "Endocrine",
+      "Gastroenterology",
+      "Genital Urinary System",
+      "Musculoskeletal",
+      "Pulmonary",
+      "Radiology",
+      "Hematology",
+      "Miscellaneous"
+    ],
+    "anchor_codes": []
+  },
+  "header_fields": [
+    "date",
+    "name",
+    "dob",
+    "prn",
+    "insurance",
+    "copay",
+    "amount_paid",
+    "payment_type"
+  ],
+  "sections": []
+}

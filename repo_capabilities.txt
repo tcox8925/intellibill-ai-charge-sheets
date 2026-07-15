@@ -1,0 +1,208 @@
+Charge-sheet Extraction Repository: Features, Functionalities, and Capabilities
+
+Overview
+This repository is a vision-first extraction pipeline for scanned, handwritten medical charge sheets (superbills). It is designed for forms where standard OCR is unreliable because the source PDF is image-based and the meaningful data comes from hand-drawn circles, checks, underlines, and handwritten notes on a repeated printed template.
+
+Primary Use Case
+- Extract structured billing and encounter data from scanned charge-sheet PDFs.
+- Identify patient header information written by hand.
+- Detect which CPT/HCPCS and ICD-10 codes were intentionally marked on the form.
+- Capture handwritten clinical notes and off-form handwritten codes.
+- Flag uncertain or ambiguous cases for human review instead of forcing a guess.
+
+Core Repository Capabilities
+
+1. Local PDF Processing Pipeline
+- Accepts a scanned PDF as input.
+- Splits the PDF into page images.
+- Treats each page as a separate encounter.
+- Processes either all pages or a selected page subset.
+- Writes extraction results to local JSON files.
+- Writes run-level metrics to a timestamped metrics JSON file.
+
+2. Vision-Based Data Extraction
+- Uses a multimodal model rather than plain OCR as the primary extraction method.
+- Rotates and normalizes rendered page images before extraction.
+- Sends the page image to the model with a strict JSON output requirement.
+- Extracts handwritten header fields such as date, patient name, DOB, PRN, insurance, copay, amount paid, and payment type.
+- Extracts selected procedures and diagnoses from printed code grids.
+- Extracts handwritten clinical notes from the form margins or adjacent regions.
+
+3. Catalog-Constrained Extraction
+- Injects a known template catalog into the extraction prompt.
+- Restricts extracted codes to the known printed form catalog.
+- Validates every returned code against the catalog.
+- Drops hallucinated or non-catalog codes automatically.
+- Separates confirmed selections from uncertain marks.
+
+4. Template Catalog Building
+- Can build a new template catalog from a representative form page.
+- Reads the printed code grid and groups codes by section.
+- Produces a structured catalog JSON with template metadata.
+- Stores per-cell low-confidence markers using needs_verify.
+- Supports auto-building a catalog when an unknown form is encountered.
+- Supports manual catalog generation from a PDF or image.
+
+5. Template Fingerprinting and Matching
+- Identifies forms by printed content rather than pixel position.
+- Uses printed section headers as the primary identity signal.
+- Uses anchor codes as a secondary tie-breaker.
+- Classifies a page as known, unknown, or fuzzy relative to existing catalogs.
+- Reuses existing catalogs for rescans of the same form.
+- Avoids rebuilding catalogs for already-known templates.
+
+6. Geometry-Based Mark Detection
+- Builds a blank-form approximation using the median of aligned pages.
+- Subtracts the blank template from each page to isolate handwritten ink.
+- Detects connected components representing hand-drawn marks.
+- Classifies marks geometrically as circle, squiggle, or blob.
+- Produces a marks-only image to help reduce false positives.
+- Can generate visual overlay images for inspection.
+- Uses this signal to corroborate or gate the model's interpretation of selected codes.
+
+7. Confidence and Review-Oriented Output
+- Produces confidence scores for confirmed selections.
+- Produces a separate possible_marks list for uncertain selections.
+- Adds page-level flags for ambiguity or extraction concerns.
+- Preserves uncertainty instead of collapsing it into false certainty.
+- Supports downstream human review workflows.
+
+8. Duplicate and Blank Detection
+- Uses extracted patient identity fields to detect duplicate encounter pages.
+- Flags blank or missing headers.
+- Records duplicate-of-page-N style signals for repeated encounters.
+
+9. Structured Output Model
+- Outputs page-level JSON with:
+  header
+  circled_procedures
+  circled_diagnoses
+  possible_marks
+  notes
+  flags
+  template_match metadata
+  page number
+- Captures both confirmed and uncertain extractions.
+- Preserves the full raw result for audit scenarios in the DB path.
+
+10. Metrics and Observability
+- Generates a run metrics file per execution.
+- Tracks counts such as pages processed, pages flagged, pages auto-built, procedures extracted, diagnoses extracted, and notes extracted.
+- Tracks flag frequency counts across the run.
+
+API and Service Capabilities
+
+11. FastAPI Service Layer
+- Exposes the extraction pipeline as an HTTP service.
+- Reuses the same core processing path as the CLI runner.
+- Supports asynchronous ingestion using background tasks.
+- Offers document status retrieval and page-level result retrieval.
+
+12. API Endpoints Provided
+- List available source folders.
+- Ingest a source PDF into the pipeline.
+- Check document processing status and metrics.
+- Retrieve extracted page results for a document.
+- Submit reviewer feedback.
+- Retrieve feedback history for a document.
+
+13. Per-Page Atomic Processing
+- Processes and persists each page as it completes.
+- Supports a callback hook during page processing.
+- Allows upload and DB persistence to happen incrementally rather than only at the end of the document.
+
+Storage and Persistence Capabilities
+
+14. Azure Blob Storage Integration
+- Finds source PDFs from a configured practice folder.
+- Downloads source PDFs from blob storage.
+- Uploads rendered page images back to blob storage.
+- Uses a consistent container and page-path layout.
+- Supports practice-scoped processing via a global configured practice name.
+
+15. Postgres Persistence Layer
+- Persists document-level metadata.
+- Persists page-level extraction results.
+- Persists confirmed and possible code extractions.
+- Persists handwritten notes.
+- Persists run metrics and processing status.
+- Persists source and rendered page blob paths for traceability.
+- Supports idempotent document creation using file SHA-256.
+
+16. Database Schema Design
+- Includes catalog storage tables.
+- Includes documents, pages, extractions, notes, and feedback tables.
+- Includes document and page provenance fields.
+- Includes quality and review-oriented fields.
+- Includes convenience views for feedback summaries and template quality metrics.
+
+17. Practice Resolution
+- Resolves the configured practice name against a pre-existing practice table.
+- Stores both the resolved practice name and practice ID on ingested documents.
+- Uses a soft reference rather than a hard foreign key to accommodate external table reloads.
+
+Feedback and Quality Loop Capabilities
+
+18. Human Feedback Capture
+- Supports false-positive feedback using incorrect extraction references.
+- Supports false-negative feedback using missed codes.
+- Supports correction metadata such as corrected code, corrected value, section, mark, reviewer, and freeform notes.
+- Stores whether feedback has been applied to future tuning or catalog updates.
+
+19. Quality Reporting
+- Provides per-document feedback summaries.
+- Provides template-level precision and recall views derived from confirmed extractions and reviewer feedback.
+- Enables iterative improvement of prompts, thresholds, and catalogs.
+
+Authentication and Environment Capabilities
+
+20. Auth Integration
+- Supports Anthropic/Foundry model access.
+- Supports Azure Key Vault secret retrieval.
+- Supports Azure identity-based access patterns.
+- Supports Postgres access using AAD token-based authentication.
+- Falls back to direct environment-based API credentials for local runs where applicable.
+
+Operational Modes
+
+21. Local Prototype Mode
+- Run locally on a PDF using run.py.
+- Write outputs to local JSON files.
+- Useful for testing, demoing, and prompt/catalog validation.
+
+22. Service/Deployment Mode
+- Run as a FastAPI service using api.py.
+- Pull source documents from blob storage.
+- Persist results to Postgres.
+- Support asynchronous production-style ingestion workflows.
+
+Input Expectations and Constraints
+- Best suited for scanned image-based charge sheets, not text PDFs.
+- Best suited for repeated printed templates with handwritten markings.
+- Designed around the NWA Internal Medicine superbill form family.
+- Can attempt new template onboarding through catalog auto-build, but it is not a generic all-forms extractor.
+- Uses page images and template context as primary signals.
+
+Notable Safety and Reliability Behaviors
+- Strict JSON output requirement from the model.
+- Retry handling for transient model/API failures.
+- Validation against a known catalog to prevent non-catalog code hallucinations.
+- Separation of confirmed marks from ambiguous marks.
+- Duplicate and blank-header detection.
+- Review-first design for low-confidence scenarios.
+
+Main Files and What They Do
+- README.md: project description and basic local run instructions.
+- run.py: CLI orchestration for PDF splitting, extraction, differentiation, and metrics.
+- extract.py: per-page model prompting, extraction, validation, and refinement.
+- build_catalog.py: template catalog generation from a representative form page.
+- fingerprint.py: content-based template matching and classification.
+- mark_detect.py: image-based handwritten mark isolation and geometric mark detection.
+- api.py: FastAPI service exposing ingestion, results, and feedback APIs.
+- db.py: Postgres persistence, reads, and feedback recording.
+- storage.py: Azure Blob source discovery, download, and page upload helpers.
+- auth.py: Key Vault, model, and Postgres authentication helpers.
+- schema.sql: reference DDL for the database tables and quality views expected by the pipeline.
+
+End-to-End Functional Summary
+This repository can ingest a scanned charge-sheet PDF, determine which form template it matches, optionally build a new template catalog for an unseen form, isolate handwritten marks from the printed background, extract structured page data using a vision model constrained by a known billing-code catalog, separate confident results from ambiguous ones, write local outputs or persist them to cloud-backed storage and Postgres, and capture reviewer feedback for ongoing quality improvement.

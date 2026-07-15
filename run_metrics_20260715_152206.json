@@ -1,0 +1,16 @@
+{
+  "timestamp": "20260715_152206",
+  "source_pdf": "July-09.pdf",
+  "pages_processed": 26,
+  "pages_flagged": 26,
+  "pages_autobuilt": 1,
+  "total_procedures": 67,
+  "total_diagnoses": 62,
+  "total_notes": 16,
+  "flag_counts": {
+    "ambiguous_mark": 25,
+    "has_possible_marks": 25,
+    "dropped_noncatalog_codes": 2,
+    "other": 1
+  }
+}

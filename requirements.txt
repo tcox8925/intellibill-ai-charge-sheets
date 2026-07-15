@@ -1,0 +1,29 @@
+# Core extraction and model clients
+anthropic
+openai
+
+# Image and document processing
+pillow
+numpy
+opencv-python
+scipy
+
+# API layer
+fastapi
+pydantic
+uvicorn
+python-multipart
+
+# Azure integrations
+azure-identity
+azure-keyvault-secrets
+azure-storage-blob
+
+# Database
+psycopg2-binary
+
+# PDF splitting helper
+pypdf
+
+# Environment loading
+python-dotenv

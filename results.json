@@ -1,0 +1,1670 @@
+{
+  "source_pdf": "june-30.pdf",
+  "page_count": 23,
+  "pages": [
+    {
+      "template_ok": "true",
+      "header": {
+        "date": "06/30/26",
+        "name": "Jeffery Church",
+        "dob": "01/20/1997",
+        "prn": "CT 47-5139",
+        "insurance": "Cigna",
+        "copay": "",
+        "amount_paid": "",
+        "payment_type": ""
+      },
+      "circled_procedures": [
+        {
+          "code": "99395",
+          "description": "Wellness Established 18-39",
+          "section": "Office Services",
+          "mark": "circle",
+          "confidence": 0.88
+        },
+        {
+          "code": "36415",
+          "description": "Routine Venipuncture",
+          "section": "Miscellaneous",
+          "mark": "circle",
+          "confidence": 0.78
+        }
+      ],
+      "circled_diagnoses": [],
+      "possible_marks": [
+        {
+          "code": "99215",
+          "description": "Office visit, L5 Estb",
+          "section": "Office Services",
+          "reason": "There appears to be handwriting or a mark near 99215 but it may be ink from adjacent writing rather than a deliberate selection",
+          "confidence": 0.4
+        },
+        {
+          "code": "96372",
+          "description": "Adm shot or MC",
+          "section": "Therapeutic Injections",
+          "reason": "Small mark near this code that could be a tick or stray pen stroke",
+          "confidence": 0.35
+        },
+        {
+          "code": "95004x80",
+          "description": "Allergy Testing",
+          "section": "Miscellaneous",
+          "reason": "Appears to have a mark or circle but could be stray ink or smudge near bottom of miscellaneous column",
+          "confidence": 0.4
+        }
+      ],
+      "notes": [],
+      "flags": [
+        "ambiguous_mark",
+        "has_possible_marks"
+      ],
+      "template_match": {
+        "state": "known",
+        "score": 0.76,
+        "catalog": "catalog_autobuilt_ea36372d.json"
+      },
+      "page": 1
+    },
+    {
+      "template_ok": "true",
+      "header": {
+        "date": "06/30/26",
+        "name": "Irania G MarTine7",
+        "dob": "12/08/2002",
+        "prn": "41274663",
+        "insurance": "BC BS",
+        "copay": "$0",
+        "amount_paid": "$0",
+        "payment_type": ""
+      },
+      "circled_procedures": [
+        {
+          "code": "99395",
+          "description": "Wellness Established 18-39",
+          "section": "Office Services",
+          "mark": "circle",
+          "confidence": 0.9
+        },
+        {
+          "code": "36415",
+          "description": "Routine Venipuncture",
+          "section": "Miscellaneous",
+          "mark": "circle",
+          "confidence": 0.85
+        }
+      ],
+      "circled_diagnoses": [],
+      "possible_marks": [
+        {
+          "code": "99396",
+          "description": "Wellness Established 40-64",
+          "section": "Office Services",
+          "reason": "Adjacent to circled 99395, mark may extend or be ink bleed",
+          "confidence": 0.35
+        },
+        {
+          "code": "99215",
+          "description": "Office visit, L5 Estb",
+          "section": "Office Services",
+          "reason": "Possible underline or stray mark near code, could be ink from handwriting above",
+          "confidence": 0.3
+        }
+      ],
+      "notes": [],
+      "flags": [
+        "ambiguous_mark",
+        "has_possible_marks"
+      ],
+      "template_match": {
+        "state": "known",
+        "score": 0.65,
+        "catalog": "catalog_autobuilt_ea36372d.json"
+      },
+      "page": 2
+    },
+    {
+      "template_ok": "true",
+      "header": {
+        "date": "06/30/26",
+        "name": "Geoger Rodas",
+        "dob": "03/13/1990",
+        "prn": "RU43199",
+        "insurance": "Cigna",
+        "copay": "",
+        "amount_paid": "",
+        "payment_type": ""
+      },
+      "circled_procedures": [
+        {
+          "code": "99214",
+          "description": "Office visit, L4 Estb",
+          "section": "Office Services",
+          "mark": "circle",
+          "confidence": 0.9
+        }
+      ],
+      "circled_diagnoses": [],
+      "possible_marks": [
+        {
+          "code": "99215",
+          "description": "Office visit, L5 Estb",
+          "section": "Office Services",
+          "reason": "Mark near 99214 circle could extend to 99215, but primary circle appears on 99214",
+          "confidence": 0.3
+        }
+      ],
+      "notes": [
+        {
+          "text": "11:35 / 11:45 Ruben T.",
+          "near": "margin",
+          "confidence": 0.85
+        }
+      ],
+      "flags": [
+        "ambiguous_mark",
+        "has_possible_marks"
+      ],
+      "template_match": {
+        "state": "known",
+        "score": 0.85,
+        "catalog": "catalog_autobuilt_ea36372d.json"
+      },
+      "page": 3
+    },
+    {
+      "template_ok": "true",
+      "header": {
+        "date": "06/30/26",
+        "name": "Jema Barrera",
+        "dob": "09/04/1983",
+        "prn": "VJ6140.50",
+        "insurance": "Ambetter",
+        "copay": "$30.00",
+        "amount_paid": "$50.00",
+        "payment_type": "CC"
+      },
+      "circled_procedures": [
+        {
+          "code": "99214",
+          "description": "Office visit, L4 Estb",
+          "section": "Office Services",
+          "mark": "circle",
+          "confidence": 0.9
+        }
+      ],
+      "circled_diagnoses": [
+        {
+          "code": "I10",
+          "description": "Unspc Essen HTN",
+          "section": "Cardiovascular",
+          "mark": "circle",
+          "confidence": 0.85
+        }
+      ],
+      "possible_marks": [
+        {
+          "code": "99205",
+          "description": "Office visit, L5 new",
+          "section": "Office Services",
+          "reason": "There appears to be a mark near 99205 but it could be ink from handwriting of the PRN number above",
+          "confidence": 0.35
+        },
+        {
+          "code": "99215",
+          "description": "Office visit, L5 Estb",
+          "section": "Office Services",
+          "reason": "Possible mark near this code but may be bleed from circling 99214",
+          "confidence": 0.3
+        }
+      ],
+      "notes": [],
+      "flags": [
+        "ambiguous_mark",
+        "has_possible_marks"
+      ],
+      "template_match": {
+        "state": "known",
+        "score": 0.78,
+        "catalog": "catalog_autobuilt_ea36372d.json"
+      },
+      "page": 4
+    },
+    {
+      "template_ok": "true",
+      "header": {
+        "date": "06/30/26",
+        "name": "Charles Fairy",
+        "dob": "09/30/1967",
+        "prn": "FC934954",
+        "insurance": "BC BS",
+        "copay": "45 0",
+        "amount_paid": "B 0",
+        "payment_type": ""
+      },
+      "circled_procedures": [
+        {
+          "code": "99205",
+          "description": "Office visit, L5 new",
+          "section": "Office Services",
+          "mark": "circle",
+          "confidence": 0.85
+        },
+        {
+          "code": "99214",
+          "description": "Office visit, L4 Estb",
+          "section": "Office Services",
+          "mark": "circle",
+          "confidence": 0.82
+        }
+      ],
+      "circled_diagnoses": [
+        {
+          "code": "M54.5",
+          "description": "Lumbago",
+          "section": "Musculoskeletal",
+          "mark": "check",
+          "confidence": 0.85
+        },
+        {
+          "code": "I10",
+          "description": "Unspc Essen HTN",
+          "section": "Cardiovascular",
+          "mark": "check",
+          "confidence": 0.82
+        },
+        {
+          "code": "E11.9",
+          "description": "Diabetes II controlled",
+          "section": "Endocrine",
+          "mark": "check",
+          "confidence": 0.8
+        }
+      ],
+      "possible_marks": [
+        {
+          "code": "99215",
+          "description": "Office visit, L5 Estb",
+          "section": "Office Services",
+          "reason": "Adjacent to circled 99205 and 99214, possible ink overlap",
+          "confidence": 0.4
+        }
+      ],
+      "notes": [],
+      "flags": [
+        "ambiguous_mark",
+        "has_possible_marks"
+      ],
+      "template_match": {
+        "state": "known",
+        "score": 0.76,
+        "catalog": "catalog_autobuilt_ea36372d.json"
+      },
+      "page": 5
+    },
+    {
+      "template_ok": "true",
+      "header": {
+        "date": "06/30/26",
+        "name": "Idalia Woods",
+        "dob": "02/20/1986",
+        "prn": "WI594324",
+        "insurance": "Healthcare",
+        "copay": "35.00",
+        "amount_paid": "35.00",
+        "payment_type": "CC"
+      },
+      "circled_procedures": [
+        {
+          "code": "99214",
+          "description": "Office visit, L4 Estb",
+          "section": "Office Services",
+          "mark": "circle",
+          "confidence": 0.9
+        }
+      ],
+      "circled_diagnoses": [],
+      "possible_marks": [
+        {
+          "code": "99205",
+          "description": "Office visit, L5 new",
+          "section": "Office Services",
+          "reason": "There appears to be a mark near 99205 but could be ink from the circling of 99214 below it",
+          "confidence": 0.35
+        },
+        {
+          "code": "99215",
+          "description": "Office visit, L5 Estb",
+          "section": "Office Services",
+          "reason": "Mark near this code could be part of the circle around 99214 extending downward",
+          "confidence": 0.3
+        }
+      ],
+      "notes": [],
+      "flags": [
+        "ambiguous_mark",
+        "has_possible_marks"
+      ],
+      "template_match": {
+        "state": "known",
+        "score": 0.72,
+        "catalog": "catalog_autobuilt_ea36372d.json"
+      },
+      "page": 6
+    },
+    {
+      "template_ok": "true",
+      "header": {
+        "date": "06/30/26",
+        "name": "Aiden Heaton",
+        "dob": "09/10/2006",
+        "prn": "HA 631947",
+        "insurance": "Wachter",
+        "copay": "$20.00",
+        "amount_paid": "",
+        "payment_type": ""
+      },
+      "circled_procedures": [
+        {
+          "code": "99214",
+          "description": "Office visit, L4 Estb",
+          "section": "Office Services",
+          "mark": "circle",
+          "confidence": 0.85
+        }
+      ],
+      "circled_diagnoses": [
+        {
+          "code": "L03.",
+          "description": "Cellulitis, Location",
+          "section": "Dermatology",
+          "mark": "circle",
+          "confidence": 0.78
+        }
+      ],
+      "possible_marks": [
+        {
+          "code": "99205",
+          "description": "Office visit, L5 new",
+          "section": "Office Services",
+          "reason": "Mark near code could be ink from handwriting of PRN number crossing this area",
+          "confidence": 0.35
+        },
+        {
+          "code": "99215",
+          "description": "Office visit, L5 Estb",
+          "section": "Office Services",
+          "reason": "Possible mark near code but could be ink bleed from adjacent circled 99214",
+          "confidence": 0.3
+        }
+      ],
+      "notes": [],
+      "flags": [
+        "ambiguous_mark",
+        "has_possible_marks"
+      ],
+      "template_match": {
+        "state": "known",
+        "score": 0.82,
+        "catalog": "catalog_autobuilt_ea36372d.json"
+      },
+      "page": 7
+    },
+    {
+      "template_ok": "true",
+      "header": {
+        "date": "06/30/26",
+        "name": "Maria Sandoval",
+        "dob": "12/26/1956",
+        "prn": "S A 172693",
+        "insurance": "Heal Thcare",
+        "copay": "",
+        "amount_paid": "",
+        "payment_type": ""
+      },
+      "circled_procedures": [
+        {
+          "code": "96372",
+          "description": "Adm shot or MC",
+          "section": "Therapeutic Injections",
+          "mark": "circle",
+          "confidence": 0.9
+        },
+        {
+          "code": "20605",
+          "description": "Intermediate joint",
+          "section": "Therapeutic Injections",
+          "mark": "circle",
+          "confidence": 0.85
+        },
+        {
+          "code": "20606",
+          "description": "Intermediate joint U/S",
+          "section": "Therapeutic Injections",
+          "mark": "circle",
+          "confidence": 0.8
+        },
+        {
+          "code": "J1885",
+          "description": "Toradol 60 mg g/ml INJ",
+          "section": "Therapeutic Injections",
+          "mark": "check",
+          "confidence": 0.9
+        },
+        {
+          "code": "J3301",
+          "description": "Kenalog 40mg",
+          "section": "Therapeutic Injections",
+          "mark": "circle",
+          "confidence": 0.85
+        },
+        {
+          "code": "82962",
+          "description": "Glucose Finger Stick",
+          "section": "Labs",
+          "mark": "circle",
+          "confidence": 0.85
+        },
+        {
+          "code": "99204",
+          "description": "Office visit, L4 new",
+          "section": "Office Services",
+          "mark": "circle",
+          "confidence": 0.9
+        },
+        {
+          "code": "72100",
+          "description": "Spine Lumbar AP & Lat",
+          "section": "Radiology",
+          "mark": "circle",
+          "confidence": 0.9
+        },
+        {
+          "code": "73560",
+          "description": "Knee X-ray",
+          "section": "Radiology",
+          "mark": "circle",
+          "confidence": 0.85
+        },
+        {
+          "code": "36415",
+          "description": "Routine Venipuncture",
+          "section": "Miscellaneous",
+          "mark": "circle",
+          "confidence": 0.8
+        }
+      ],
+      "circled_diagnoses": [
+        {
+          "code": "M54.5",
+          "description": "Lumbago",
+          "section": "Musculoskeletal",
+          "mark": "circle",
+          "confidence": 0.9
+        },
+        {
+          "code": "M25.729",
+          "description": "Ethesopathy of Elbow",
+          "section": "Musculoskeletal",
+          "mark": "circle",
+          "confidence": 0.8
+        },
+        {
+          "code": "M79.1",
+          "description": "Myalgia",
+          "section": "Musculoskeletal",
+          "mark": "circle",
+          "confidence": 0.85
+        },
+        {
+          "code": "I10",
+          "description": "Unspc Essen HTN",
+          "section": "Cardiovascular",
+          "mark": "check",
+          "confidence": 0.85
+        }
+      ],
+      "possible_marks": [
+        {
+          "code": "99205",
+          "description": "Office visit, L5 new",
+          "section": "Office Services",
+          "reason": "Partially struck through or marked near 99204, unclear if deliberate",
+          "confidence": 0.4
+        },
+        {
+          "code": "M70.50",
+          "description": "Ethesopathy of Knee",
+          "section": "Musculoskeletal",
+          "reason": "Mark near code area but unclear if deliberate selection or ink from adjacent writing",
+          "confidence": 0.5
+        },
+        {
+          "code": "M70.7",
+          "description": "Hip Bursitis",
+          "section": "Musculoskeletal",
+          "reason": "Possible mark near code but could be ink bleed from adjacent handwriting",
+          "confidence": 0.4
+        },
+        {
+          "code": "95004x80",
+          "description": "Allergy Testing",
+          "section": "Miscellaneous",
+          "reason": "Possible circle or mark but partially obscured",
+          "confidence": 0.4
+        }
+      ],
+      "notes": [
+        {
+          "text": "x Soft tissue",
+          "near": "J3301",
+          "confidence": 0.7
+        },
+        {
+          "text": "R Knee Pain",
+          "near": "M79.1",
+          "confidence": 0.8
+        },
+        {
+          "text": "result",
+          "near": "73560",
+          "confidence": 0.7
+        },
+        {
+          "text": "Maria - Low back",
+          "near": "margin",
+          "confidence": 0.7
+        }
+      ],
+      "flags": [
+        "ambiguous_mark",
+        "has_possible_marks"
+      ],
+      "template_match": {
+        "state": "known",
+        "score": 0.83,
+        "catalog": "catalog_autobuilt_ea36372d.json"
+      },
+      "page": 8
+    },
+    {
+      "template_ok": "true",
+      "header": {
+        "date": "06/30/26",
+        "name": "Margarita E Martin",
+        "dob": "10/19/1976",
+        "prn": "M4B/6807",
+        "insurance": "Ambetter",
+        "copay": "5.00",
+        "amount_paid": "5-00",
+        "payment_type": "CC"
+      },
+      "circled_procedures": [
+        {
+          "code": "99214",
+          "description": "Office visit, L4 Estb",
+          "section": "Office Services",
+          "mark": "circle",
+          "confidence": 0.88
+        },
+        {
+          "code": "83013",
+          "description": "H Pylori Breath Test",
+          "section": "Labs",
+          "mark": "check",
+          "confidence": 0.82
+        }
+      ],
+      "circled_diagnoses": [
+        {
+          "code": "K20.1",
+          "description": "Reflux esophagitis",
+          "section": "Musculoskeletal",
+          "mark": "check",
+          "confidence": 0.82
+        },
+        {
+          "code": "R74.0",
+          "description": "Elevated Art",
+          "section": "Musculoskeletal",
+          "mark": "circle",
+          "confidence": 0.8
+        }
+      ],
+      "possible_marks": [
+        {
+          "code": "99215",
+          "description": "Office visit, L5 Estb",
+          "section": "Office Services",
+          "reason": "Mark near 99215 row but could be part of circle around 99214",
+          "confidence": 0.4
+        },
+        {
+          "code": "99205",
+          "description": "Office visit, L5 new",
+          "section": "Office Services",
+          "reason": "Faint mark near this code, possibly ink from adjacent circle on 99214",
+          "confidence": 0.3
+        }
+      ],
+      "notes": [
+        {
+          "text": "12 nov n 1/2  new",
+          "near": "margin",
+          "confidence": 0.5
+        }
+      ],
+      "flags": [
+        "ambiguous_mark",
+        "has_possible_marks"
+      ],
+      "template_match": {
+        "state": "known",
+        "score": 0.6,
+        "catalog": "catalog_autobuilt_ea36372d.json"
+      },
+      "page": 9
+    },
+    {
+      "template_ok": "true",
+      "header": {
+        "date": "06/30/26",
+        "name": "James McWilliam",
+        "dob": "01/27/1978",
+        "prn": "MT932520",
+        "insurance": "Healthcare",
+        "copay": "$0",
+        "amount_paid": "$101.60",
+        "payment_type": "CC"
+      },
+      "circled_procedures": [
+        {
+          "code": "99205",
+          "description": "Office visit, L5 new",
+          "section": "Office Services",
+          "mark": "circle",
+          "confidence": 0.85
+        },
+        {
+          "code": "99215",
+          "description": "Office visit, L5 Estb",
+          "section": "Office Services",
+          "mark": "circle",
+          "confidence": 0.8
+        }
+      ],
+      "circled_diagnoses": [
+        {
+          "code": "I10",
+          "description": "Unspc Essen HTN",
+          "section": "Cardiovascular",
+          "mark": "check",
+          "confidence": 0.85
+        },
+        {
+          "code": "E78.2",
+          "description": "Mixed Hyperlipidemia",
+          "section": "Cardiovascular",
+          "mark": "check",
+          "confidence": 0.85
+        },
+        {
+          "code": "E11.9",
+          "description": "Diabetes II controlled",
+          "section": "Endocrine",
+          "mark": "check",
+          "confidence": 0.85
+        },
+        {
+          "code": "M54.5",
+          "description": "Lumbago",
+          "section": "Musculoskeletal",
+          "mark": "check",
+          "confidence": 0.8
+        }
+      ],
+      "possible_marks": [
+        {
+          "code": "99214",
+          "description": "Office visit, L4 Estb",
+          "section": "Office Services",
+          "reason": "Mark near 99214/99215 area, could be on either line",
+          "confidence": 0.45
+        },
+        {
+          "code": "20600",
+          "description": "Small joint & bursa",
+          "section": "Therapeutic Injections",
+          "reason": "Curved mark near this line but may be stray pen stroke from handwriting above",
+          "confidence": 0.35
+        }
+      ],
+      "notes": [
+        {
+          "text": "Mrs. Williams",
+          "near": "margin bottom",
+          "confidence": 0.6
+        }
+      ],
+      "flags": [
+        "ambiguous_mark",
+        "has_possible_marks"
+      ],
+      "template_match": {
+        "state": "known",
+        "score": 0.83,
+        "catalog": "catalog_autobuilt_ea36372d.json"
+      },
+      "page": 10
+    },
+    {
+      "template_ok": "true",
+      "header": {
+        "date": "06/30/26",
+        "name": "Noemi Helguero",
+        "dob": "07/13/1990",
+        "prn": "ON47524Z",
+        "insurance": "CHam Pva",
+        "copay": "",
+        "amount_paid": "",
+        "payment_type": ""
+      },
+      "circled_procedures": [
+        {
+          "code": "99204",
+          "description": "Office visit, L4 new",
+          "section": "Office Services",
+          "mark": "circle",
+          "confidence": 0.85
+        },
+        {
+          "code": "99214",
+          "description": "Office visit, L4 Estb",
+          "section": "Office Services",
+          "mark": "circle",
+          "confidence": 0.88
+        }
+      ],
+      "circled_diagnoses": [],
+      "possible_marks": [
+        {
+          "code": "99205",
+          "description": "Office visit, L5 new",
+          "section": "Office Services",
+          "reason": "Mark near 99205 could be ink from adjacent circling of 99204, or a separate deliberate mark",
+          "confidence": 0.45
+        },
+        {
+          "code": "99215",
+          "description": "Office visit, L5 Estb",
+          "section": "Office Services",
+          "reason": "Possible mark near 99215, but could be ink bleed from 99214 circle or handwriting descender",
+          "confidence": 0.4
+        }
+      ],
+      "notes": [
+        {
+          "text": "Vitals",
+          "near": "margin",
+          "confidence": 0.8
+        }
+      ],
+      "flags": [
+        "ambiguous_mark",
+        "has_possible_marks"
+      ],
+      "template_match": {
+        "state": "known",
+        "score": 0.8,
+        "catalog": "catalog_autobuilt_ea36372d.json"
+      },
+      "page": 11
+    },
+    {
+      "template_ok": "true",
+      "header": {
+        "date": "06/30/26",
+        "name": "Victoria M Barrera",
+        "dob": "08/14/1948",
+        "prn": "BV90709",
+        "insurance": "Humana",
+        "copay": "$0",
+        "amount_paid": "",
+        "payment_type": ""
+      },
+      "circled_procedures": [
+        {
+          "code": "99214",
+          "description": "Office visit, L4 Estb",
+          "section": "Office Services",
+          "mark": "circle",
+          "confidence": 0.88
+        }
+      ],
+      "circled_diagnoses": [
+        {
+          "code": "I10",
+          "description": "Unspc Essen HTN",
+          "section": "Cardiovascular",
+          "mark": "circle",
+          "confidence": 0.82
+        },
+        {
+          "code": "E78.2",
+          "description": "Mixed Hyperlipidemia",
+          "section": "Cardiovascular",
+          "mark": "circle",
+          "confidence": 0.8
+        }
+      ],
+      "possible_marks": [
+        {
+          "code": "99205",
+          "description": "Office visit, L5 new",
+          "section": "Office Services",
+          "reason": "Mark near 99205 could be part of circle around 99214 or stray ink",
+          "confidence": 0.35
+        },
+        {
+          "code": "99215",
+          "description": "Office visit, L5 Estb",
+          "section": "Office Services",
+          "reason": "Ink near this code adjacent to circled 99214, possibly part of same circle or stray",
+          "confidence": 0.3
+        }
+      ],
+      "notes": [],
+      "flags": [
+        "ambiguous_mark",
+        "has_possible_marks"
+      ],
+      "template_match": {
+        "state": "known",
+        "score": 0.83,
+        "catalog": "catalog_autobuilt_ea36372d.json"
+      },
+      "page": 12
+    },
+    {
+      "template_ok": "true",
+      "header": {
+        "date": "06/30/26",
+        "name": "Ricky Sisenore",
+        "dob": "10/25/1976",
+        "prn": "SR 77591Z",
+        "insurance": "UMR",
+        "copay": "$30.00",
+        "amount_paid": "",
+        "payment_type": ""
+      },
+      "circled_procedures": [
+        {
+          "code": "99205",
+          "description": "Office visit, L5 new",
+          "section": "Office Services",
+          "mark": "circle",
+          "confidence": 0.82
+        },
+        {
+          "code": "99215",
+          "description": "Office visit, L5 Estb",
+          "section": "Office Services",
+          "mark": "circle",
+          "confidence": 0.78
+        }
+      ],
+      "circled_diagnoses": [
+        {
+          "code": "M54.5",
+          "description": "Lumbago",
+          "section": "Musculoskeletal",
+          "mark": "circle",
+          "confidence": 0.85
+        }
+      ],
+      "possible_marks": [
+        {
+          "code": "99214",
+          "description": "Office visit, L4 Estb",
+          "section": "Office Services",
+          "reason": "Mark near 99214/99215 area, could be ink from circling 99205 or 99215",
+          "confidence": 0.45
+        },
+        {
+          "code": "20600",
+          "description": "Small joint & bursa",
+          "section": "Therapeutic Injections",
+          "reason": "Curved mark nearby but could be from handwriting descender of name",
+          "confidence": 0.35
+        }
+      ],
+      "notes": [],
+      "flags": [
+        "ambiguous_mark",
+        "has_possible_marks"
+      ],
+      "template_match": {
+        "state": "known",
+        "score": 0.82,
+        "catalog": "catalog_autobuilt_ea36372d.json"
+      },
+      "page": 13
+    },
+    {
+      "template_ok": "true",
+      "header": {
+        "date": "06/30/26",
+        "name": "Richard S. Herrin",
+        "dob": "06/25/1976",
+        "prn": "RH234094",
+        "insurance": "BCBS",
+        "copay": "20.00",
+        "amount_paid": "20.00",
+        "payment_type": "C"
+      },
+      "circled_procedures": [
+        {
+          "code": "96372",
+          "description": "Adm shot or MC",
+          "section": "Therapeutic Injections",
+          "mark": "circle",
+          "confidence": 0.85
+        },
+        {
+          "code": "20600",
+          "description": "Small joint & bursa",
+          "section": "Therapeutic Injections",
+          "mark": "circle",
+          "confidence": 0.8
+        },
+        {
+          "code": "20550",
+          "description": "Single Tendon sheath",
+          "section": "Therapeutic Injections",
+          "mark": "circle",
+          "confidence": 0.82
+        },
+        {
+          "code": "J1885",
+          "description": "Toradol 60 mg g/ml INJ",
+          "section": "Therapeutic Injections",
+          "mark": "check",
+          "confidence": 0.85
+        },
+        {
+          "code": "J3301",
+          "description": "Kenalog 40mg",
+          "section": "Therapeutic Injections",
+          "mark": "check",
+          "confidence": 0.85
+        },
+        {
+          "code": "99214",
+          "description": "Office visit, L4 Estb",
+          "section": "Office Services",
+          "mark": "circle",
+          "confidence": 0.9
+        },
+        {
+          "code": "73560",
+          "description": "Knee X-ray",
+          "section": "Radiology",
+          "mark": "circle",
+          "confidence": 0.8
+        }
+      ],
+      "circled_diagnoses": [
+        {
+          "code": "M72",
+          "description": "Plantar Fasciitis",
+          "section": "Musculoskeletal",
+          "mark": "circle",
+          "confidence": 0.82
+        },
+        {
+          "code": "M54.6",
+          "description": "Pain in thoracic Spine",
+          "section": "Musculoskeletal",
+          "mark": "circle",
+          "confidence": 0.8
+        }
+      ],
+      "possible_marks": [
+        {
+          "code": "20552",
+          "description": "Inject trigger point 2+",
+          "section": "Therapeutic Injections",
+          "reason": "Handwriting nearby with 'x L' notation, possibly marked but unclear",
+          "confidence": 0.55
+        },
+        {
+          "code": "99215",
+          "description": "Office visit, L5 Estb",
+          "section": "Office Services",
+          "reason": "Adjacent to circled 99214, possible ink bleed from circle",
+          "confidence": 0.35
+        },
+        {
+          "code": "J0696",
+          "description": "Rocephin 1 g IM INJ",
+          "section": "Therapeutic Injections",
+          "reason": "Faint mark near code, could be stray pen stroke",
+          "confidence": 0.3
+        }
+      ],
+      "notes": [
+        {
+          "text": "X 2",
+          "near": "J3301",
+          "confidence": 0.75
+        },
+        {
+          "text": "both feet",
+          "near": "J3301",
+          "confidence": 0.85
+        },
+        {
+          "text": "x L",
+          "near": "20552",
+          "confidence": 0.7
+        },
+        {
+          "text": "foot Primr",
+          "near": "73560",
+          "confidence": 0.65
+        }
+      ],
+      "flags": [
+        "ambiguous_mark",
+        "has_possible_marks"
+      ],
+      "template_match": {
+        "state": "known",
+        "score": 0.7,
+        "catalog": "catalog_autobuilt_ea36372d.json"
+      },
+      "page": 14
+    },
+    {
+      "template_ok": "true",
+      "header": {
+        "date": "06/30/26",
+        "name": "Jaycie Blancett",
+        "dob": "10/28/2000",
+        "prn": "BJ498786",
+        "insurance": "Cigna",
+        "copay": "$20.00",
+        "amount_paid": "20.00",
+        "payment_type": "0.00"
+      },
+      "circled_procedures": [
+        {
+          "code": "99214",
+          "description": "Office visit, L4 Estb",
+          "section": "Office Services",
+          "mark": "circle",
+          "confidence": 0.92
+        }
+      ],
+      "circled_diagnoses": [
+        {
+          "code": "M75.",
+          "description": "Disbursae&Ten/Shoulder Reg.",
+          "section": "Musculoskeletal",
+          "mark": "circle",
+          "confidence": 0.78
+        }
+      ],
+      "possible_marks": [
+        {
+          "code": "99205",
+          "description": "Office visit, L5 new",
+          "section": "Office Services",
+          "reason": "Line or strike-through near code 99205, could be crossed out rather than selected",
+          "confidence": 0.35
+        },
+        {
+          "code": "99215",
+          "description": "Office visit, L5 Estb",
+          "section": "Office Services",
+          "reason": "Ink mark near code, possibly from circling 99214 above",
+          "confidence": 0.3
+        }
+      ],
+      "notes": [],
+      "flags": [
+        "ambiguous_mark",
+        "has_possible_marks"
+      ],
+      "template_match": {
+        "state": "known",
+        "score": 0.88,
+        "catalog": "catalog_autobuilt_ea36372d.json"
+      },
+      "page": 15
+    },
+    {
+      "template_ok": "true",
+      "header": {
+        "date": "06/30/26",
+        "name": "Rebecca Goldman",
+        "dob": "05/02/1984",
+        "prn": "GR424467",
+        "insurance": "BCBS",
+        "copay": "",
+        "amount_paid": "",
+        "payment_type": ""
+      },
+      "circled_procedures": [
+        {
+          "code": "99214",
+          "description": "Office visit, L4 Estb",
+          "section": "Office Services",
+          "mark": "circle",
+          "confidence": 0.9
+        }
+      ],
+      "circled_diagnoses": [
+        {
+          "code": "I10",
+          "description": "Unspc Essen HTN",
+          "section": "Cardiovascular",
+          "mark": "circle",
+          "confidence": 0.85
+        },
+        {
+          "code": "E78.2",
+          "description": "Mixed Hyperlipidemia",
+          "section": "Cardiovascular",
+          "mark": "circle",
+          "confidence": 0.85
+        }
+      ],
+      "possible_marks": [
+        {
+          "code": "99215",
+          "description": "Office visit, L5 Estb",
+          "section": "Office Services",
+          "reason": "Mark near 99214/99215 area, could be part of circle around 99214",
+          "confidence": 0.35
+        },
+        {
+          "code": "99205",
+          "description": "Office visit, L5 new",
+          "section": "Office Services",
+          "reason": "Adjacent to circled 99214, possible ink bleed from circle",
+          "confidence": 0.25
+        }
+      ],
+      "notes": [],
+      "flags": [
+        "ambiguous_mark",
+        "has_possible_marks"
+      ],
+      "template_match": {
+        "state": "known",
+        "score": 0.78,
+        "catalog": "catalog_autobuilt_ea36372d.json"
+      },
+      "page": 16
+    },
+    {
+      "template_ok": "true",
+      "header": {
+        "date": "06/30/26",
+        "name": "Douglas Jacinto",
+        "dob": "06/09/1990",
+        "prn": "SD772929",
+        "insurance": "Ambetter",
+        "copay": "15.00",
+        "amount_paid": "15.00",
+        "payment_type": "CC"
+      },
+      "circled_procedures": [
+        {
+          "code": "99214",
+          "description": "Office visit, L4 Estb",
+          "section": "Office Services",
+          "mark": "circle",
+          "confidence": 0.9
+        }
+      ],
+      "circled_diagnoses": [
+        {
+          "code": "R10.",
+          "description": "Abdominal Pain",
+          "section": "Musculoskeletal",
+          "mark": "circle",
+          "confidence": 0.85
+        }
+      ],
+      "possible_marks": [
+        {
+          "code": "99205",
+          "description": "Office visit, L5 new",
+          "section": "Office Services",
+          "reason": "Appears to have a mark or strikethrough near code, but unclear if deliberate selection",
+          "confidence": 0.4
+        },
+        {
+          "code": "99215",
+          "description": "Office visit, L5 Estb",
+          "section": "Office Services",
+          "reason": "Mark or strikethrough visible near code, possibly crossed out rather than selected",
+          "confidence": 0.35
+        }
+      ],
+      "notes": [],
+      "flags": [
+        "ambiguous_mark",
+        "has_possible_marks"
+      ],
+      "template_match": {
+        "state": "known",
+        "score": 0.83,
+        "catalog": "catalog_autobuilt_ea36372d.json"
+      },
+      "page": 17
+    },
+    {
+      "template_ok": "true",
+      "header": {
+        "date": "06/30/26",
+        "name": "Caitlyn M Bailey",
+        "dob": "04/21/1986",
+        "prn": "BC 380565",
+        "insurance": "BC BS",
+        "copay": "35.00",
+        "amount_paid": "70.00",
+        "payment_type": "CC"
+      },
+      "circled_procedures": [
+        {
+          "code": "99205",
+          "description": "Office visit, L5 new",
+          "section": "Office Services",
+          "mark": "circle",
+          "confidence": 0.85
+        },
+        {
+          "code": "99214",
+          "description": "Office visit, L4 Estb",
+          "section": "Office Services",
+          "mark": "circle",
+          "confidence": 0.8
+        }
+      ],
+      "circled_diagnoses": [
+        {
+          "code": "M54.5",
+          "description": "Lumbago",
+          "section": "Musculoskeletal",
+          "mark": "circle",
+          "confidence": 0.85
+        }
+      ],
+      "possible_marks": [
+        {
+          "code": "99215",
+          "description": "Office visit, L5 Estb",
+          "section": "Office Services",
+          "reason": "Mark near 99214/99215 area, could be ink from circling adjacent code",
+          "confidence": 0.4
+        },
+        {
+          "code": "G0477",
+          "description": "Presumptive Test",
+          "section": "Office Services",
+          "reason": "Possible mark near code but could be stray ink or handwriting bleed from header",
+          "confidence": 0.35
+        }
+      ],
+      "notes": [
+        {
+          "text": "1:00pm 1:30pm",
+          "near": "margin",
+          "confidence": 0.85
+        },
+        {
+          "text": "d.031",
+          "near": "margin",
+          "confidence": 0.6
+        }
+      ],
+      "flags": [
+        "ambiguous_mark",
+        "has_possible_marks"
+      ],
+      "template_match": {
+        "state": "known",
+        "score": 0.82,
+        "catalog": "catalog_autobuilt_ea36372d.json"
+      },
+      "page": 18
+    },
+    {
+      "template_ok": "true",
+      "header": {
+        "date": "06/30/26",
+        "name": "Colton Offenbacker",
+        "dob": "01/09/1990",
+        "prn": "OC308963",
+        "insurance": "Ambetter",
+        "copay": "",
+        "amount_paid": "",
+        "payment_type": ""
+      },
+      "circled_procedures": [
+        {
+          "code": "99215",
+          "description": "Office visit, L5 Estb",
+          "section": "Office Services",
+          "mark": "circle",
+          "confidence": 0.9
+        }
+      ],
+      "circled_diagnoses": [
+        {
+          "code": "M54.5",
+          "description": "Lumbago",
+          "section": "Musculoskeletal",
+          "mark": "circle",
+          "confidence": 0.85
+        }
+      ],
+      "possible_marks": [
+        {
+          "code": "99214",
+          "description": "Office visit, L4 Estb",
+          "section": "Office Services",
+          "reason": "Circle appears to encompass 99215 but may extend to 99214 area",
+          "confidence": 0.35
+        }
+      ],
+      "notes": [],
+      "flags": [
+        "ambiguous_mark",
+        "has_possible_marks"
+      ],
+      "template_match": {
+        "state": "known",
+        "score": 0.83,
+        "catalog": "catalog_autobuilt_ea36372d.json"
+      },
+      "page": 19
+    },
+    {
+      "template_ok": "true",
+      "header": {
+        "date": "06/30/26",
+        "name": "Doroteo Mendez",
+        "dob": "03/31/1953",
+        "prn": "MD 46 2898",
+        "insurance": "Humana",
+        "copay": "",
+        "amount_paid": "",
+        "payment_type": ""
+      },
+      "circled_procedures": [
+        {
+          "code": "99205",
+          "description": "Office visit, L5 new",
+          "section": "Office Services",
+          "mark": "circle",
+          "confidence": 0.85
+        }
+      ],
+      "circled_diagnoses": [
+        {
+          "code": "E11.9",
+          "description": "Diabetes II controlled",
+          "section": "Endocrine",
+          "mark": "circle",
+          "confidence": 0.82
+        },
+        {
+          "code": "I10",
+          "description": "Unspc Essen HTN",
+          "section": "Cardiovascular",
+          "mark": "circle",
+          "confidence": 0.8
+        },
+        {
+          "code": "E78.2",
+          "description": "Mixed Hyperlipidemia",
+          "section": "Cardiovascular",
+          "mark": "circle",
+          "confidence": 0.8
+        }
+      ],
+      "possible_marks": [
+        {
+          "code": "99215",
+          "description": "Office visit, L5 Estb",
+          "section": "Office Services",
+          "reason": "Near circled 99205, possibly marked or ink bleed from adjacent circle",
+          "confidence": 0.4
+        },
+        {
+          "code": "99214",
+          "description": "Office visit, L4 Estb",
+          "section": "Office Services",
+          "reason": "Proximity to circled area around office visit codes, possible stray mark",
+          "confidence": 0.35
+        }
+      ],
+      "notes": [
+        {
+          "text": "3 DIABETIC",
+          "near": "margin (bottom)",
+          "confidence": 0.75
+        }
+      ],
+      "flags": [
+        "ambiguous_mark",
+        "has_possible_marks"
+      ],
+      "template_match": {
+        "state": "known",
+        "score": 0.82,
+        "catalog": "catalog_autobuilt_ea36372d.json"
+      },
+      "page": 20
+    },
+    {
+      "template_ok": "true",
+      "header": {
+        "date": "06/30/26",
+        "name": "Ashley Johnson",
+        "dob": "02/22/1987",
+        "prn": "LA466455",
+        "insurance": "Healthcare",
+        "copay": "$ 0",
+        "amount_paid": "$ 0",
+        "payment_type": ""
+      },
+      "circled_procedures": [
+        {
+          "code": "99214",
+          "description": "Office visit, L4 Estb",
+          "section": "Office Services",
+          "mark": "circle",
+          "confidence": 0.9
+        }
+      ],
+      "circled_diagnoses": [
+        {
+          "code": "I10",
+          "description": "Unspc Essen HTN",
+          "section": "Cardiovascular",
+          "mark": "circle",
+          "confidence": 0.85
+        },
+        {
+          "code": "E78.2",
+          "description": "Mixed Hyperlipidemia",
+          "section": "Cardiovascular",
+          "mark": "circle",
+          "confidence": 0.82
+        }
+      ],
+      "possible_marks": [
+        {
+          "code": "99205",
+          "description": "Office visit, L5 new",
+          "section": "Office Services",
+          "reason": "Mark near 99205 could be ink from circling 99214 nearby or stray stroke",
+          "confidence": 0.35
+        },
+        {
+          "code": "99215",
+          "description": "Office visit, L5 Estb",
+          "section": "Office Services",
+          "reason": "Possible mark near this code but may be ink bleed from circling 99214",
+          "confidence": 0.3
+        }
+      ],
+      "notes": [],
+      "flags": [
+        "ambiguous_mark",
+        "has_possible_marks"
+      ],
+      "template_match": {
+        "state": "known",
+        "score": 0.82,
+        "catalog": "catalog_autobuilt_ea36372d.json"
+      },
+      "page": 21
+    },
+    {
+      "template_ok": "true",
+      "header": {
+        "date": "06/30/26",
+        "name": "Ricardo Velasquez",
+        "dob": "09/20/1966",
+        "prn": "RV609755",
+        "insurance": "Healthcare",
+        "copay": "$35.00",
+        "amount_paid": "36.35",
+        "payment_type": "CC"
+      },
+      "circled_procedures": [
+        {
+          "code": "99215",
+          "description": "Office visit, L5 Estb",
+          "section": "Office Services",
+          "mark": "circle",
+          "confidence": 0.88
+        }
+      ],
+      "circled_diagnoses": [
+        {
+          "code": "I10",
+          "description": "Unspc Essen HTN",
+          "section": "Cardiovascular",
+          "mark": "circle",
+          "confidence": 0.82
+        },
+        {
+          "code": "E11.65",
+          "description": "Diabetes II uncontrolled",
+          "section": "Endocrine",
+          "mark": "circle",
+          "confidence": 0.8
+        },
+        {
+          "code": "M54.5",
+          "description": "Lumbago",
+          "section": "Musculoskeletal",
+          "mark": "circle",
+          "confidence": 0.8
+        }
+      ],
+      "possible_marks": [
+        {
+          "code": "99214",
+          "description": "Office visit, L4 Estb",
+          "section": "Office Services",
+          "reason": "Circle-like mark near 99214/99215 area, could be intended for either",
+          "confidence": 0.4
+        },
+        {
+          "code": "99205",
+          "description": "Office visit, L5 new",
+          "section": "Office Services",
+          "reason": "Strikethrough or mark near 99205, possibly crossed out rather than selected",
+          "confidence": 0.3
+        }
+      ],
+      "notes": [],
+      "flags": [
+        "ambiguous_mark",
+        "has_possible_marks"
+      ],
+      "template_match": {
+        "state": "known",
+        "score": 0.82,
+        "catalog": "catalog_autobuilt_ea36372d.json"
+      },
+      "page": 22
+    },
+    {
+      "template_ok": "true",
+      "header": {
+        "date": "06/30/26",
+        "name": "Gustavo Grispin",
+        "dob": "05/17/2002",
+        "prn": "CG941886",
+        "insurance": "Hea lthcare",
+        "copay": "$35.00",
+        "amount_paid": "$35.00",
+        "payment_type": "CC"
+      },
+      "circled_procedures": [
+        {
+          "code": "99214",
+          "description": "Office visit, L4 Estb",
+          "section": "Office Services",
+          "mark": "circle",
+          "confidence": 0.9
+        }
+      ],
+      "circled_diagnoses": [
+        {
+          "code": "M54.5",
+          "description": "Lumbago",
+          "section": "Musculoskeletal",
+          "mark": "circle",
+          "confidence": 0.85
+        }
+      ],
+      "possible_marks": [
+        {
+          "code": "99205",
+          "description": "Office visit, L5 new",
+          "section": "Office Services",
+          "reason": "Line or mark near 99205, could be stray ink or part of circling 99214",
+          "confidence": 0.35
+        },
+        {
+          "code": "99215",
+          "description": "Office visit, L5 Estb",
+          "section": "Office Services",
+          "reason": "Appears to have a mark near it, possibly stray ink from circling 99214",
+          "confidence": 0.3
+        }
+      ],
+      "notes": [],
+      "flags": [
+        "ambiguous_mark",
+        "has_possible_marks"
+      ],
+      "template_match": {
+        "state": "known",
+        "score": 0.85,
+        "catalog": "catalog_autobuilt_ea36372d.json"
+      },
+      "page": 23
+    }
+  ]
+}

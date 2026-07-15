@@ -1,0 +1,14 @@
+{
+  "timestamp": "20260708_180534",
+  "source_pdf": "june-30.pdf",
+  "pages_processed": 23,
+  "pages_flagged": 23,
+  "pages_autobuilt": 0,
+  "total_procedures": 46,
+  "total_diagnoses": 35,
+  "total_notes": 15,
+  "flag_counts": {
+    "ambiguous_mark": 23,
+    "has_possible_marks": 23
+  }
+}

@@ -1,0 +1,475 @@
+Charge-sheet CLI Execution Flow
+
+Command Being Explained
+python3 run.py files/July-09.pdf
+
+Top-Level Entry Chain
+1. Python starts [run.py].
+2. `if __name__ == "__main__": main()` executes.
+3. `main()` parses CLI args.
+4. `main()` builds the output path.
+5. `main()` creates the model client with `make_client()`.
+6. `main()` loads known catalogs with `load_registry()`.
+7. `main()` calls `process_pdf(...)`.
+8. `process_pdf(...)` does all page-level processing.
+9. `main()` writes the final JSON results file.
+10. `main()` writes the metrics JSON file.
+
+Detailed Function-by-Function Flow
+
+Stage 1: CLI startup
+Function: `main()` in run.py
+Role:
+- reads the input PDF path
+- reads optional flags like `--pages`, `--catalog`, `--out`, `--no-auto-build`
+- chooses the output JSON file path
+
+Important calls from `main()`:
+- `make_client()`
+- `load_registry(args.catalog)`
+- `process_pdf(args.pdf, client, registry, ...)`
+- `json.dump(...)` for final output
+- `build_metrics(...)` output write
+
+Stage 2: client creation
+Function: `make_client()` in run.py
+Role:
+- decides how the Anthropic client is created
+
+Path A: internal Azure/Key Vault path
+- imports `get_anthropic_client` and `get_kv_client` from auth.py
+- calls `get_kv_client()`
+- calls `get_anthropic_client(get_kv_client())`
+
+Path B: local fallback path
+- if the Azure/Key Vault path fails, `make_client()` falls back to env vars
+- reads `ANTHROPIC_API_KEY`
+- optionally reads `ANTHROPIC_BASE_URL`
+- returns either:
+  - `anthropic.AnthropicFoundry(...)` if base URL is set
+  - `anthropic.Anthropic(...)` otherwise
+
+Why this exists:
+- lets the repo run in two modes:
+  - internal cloud-backed auth
+  - local direct API-key auth
+
+Stage 3: catalog registry load
+Function: `load_registry()` in run.py
+Role:
+- loads known catalog JSON files into memory
+- uses the explicit catalog if provided
+- also scans `catalog*.json`
+
+Why this exists:
+- the extractor does not want to rediscover a known form template every time
+- it prefers to match the page against existing form catalogs first
+
+Stage 4: PDF processing starts
+Function: `process_pdf()` in run.py
+Role:
+- orchestrates the actual page-by-page extraction pipeline
+
+Immediate sub-steps:
+1. `split_pdf(pdf_path, pages_dir, RENDER_DPI)`
+2. optionally build a shared ink-isolation template
+3. loop over each rendered page image
+
+Stage 4A: PDF split
+Function: `split_pdf()` in run.py
+Role:
+- runs `pdftoppm` to rasterize the PDF into page PNGs
+- writes files like `pages/page-01.png`, `pages/page-02.png`, etc.
+- returns the sorted list of image paths
+
+Why this exists:
+- the model works on images, not directly on the source PDF bytes
+
+Stage 4B: optional ink-isolation setup
+Function: `build_template()` in mark_detect.py
+Called from: `process_pdf()` when there are at least 4 pages
+Role:
+- aligns pages
+- computes a median blank-form template
+- makes later handwritten mark isolation possible
+
+Why this exists:
+- helps separate handwritten circles/checks from the printed form background
+
+Per-Page Loop Inside `process_pdf()`
+For each page image path:
+
+Step P1: identify the printed form
+Function: `identify_page(path, client)` in extract.py
+Role:
+- sends a lightweight vision request using the Haiku model
+- reads only printed section headers and a few printed billing codes
+- ignores handwriting for this stage
+
+Important helper inside this stage:
+- `load_page_b64(path)` in extract.py
+  Role:
+  - opens the page image
+  - rotates it upright
+  - resizes if needed
+  - converts it to base64 PNG for the model request
+
+Output of `identify_page()`:
+- `seen_sections`
+- `seen_codes`
+
+Why this exists:
+- it is a cheap template-identification pass before full extraction
+
+Step P2: choose the best catalog
+Function: `pick_catalog(seen_labels, seen_codes, registry)` in run.py
+Role:
+- compares the page fingerprint against all loaded catalogs
+- returns the best matching catalog and score
+
+Important helper involved indirectly:
+- `score(...)` in fingerprint.py
+  Role:
+  - compares normalized printed section headers and anchor codes
+  - gives a weighted similarity score
+
+Important helper used for auto-build IDs:
+- `_norm(...)` in fingerprint.py
+  Role:
+  - normalizes strings for fingerprint matching and ID generation
+
+Possible outcomes:
+- known template
+- miss / unknown template
+
+Step P3: if template is unknown, optionally auto-build a new catalog
+Function: `build_catalog(...)` in build_catalog.py
+Called only when:
+- template match is a miss
+- `--no-auto-build` is not set
+
+Role:
+- builds a new catalog JSON from a representative page
+
+Sub-flow of `build_catalog(...)`:
+1. `load_image_b64(...)`
+   Role:
+   - loads and rasterizes a page at higher DPI for catalog accuracy
+2. `build_catalog_from_b64(...)`
+   Role:
+   - sends a large vision request to read the printed code grid
+   - returns structured sections and cells
+3. writes `catalog_<template_id>.json`
+
+Why this exists:
+- lets the pipeline adapt to a new but similar form layout without manual coding first
+
+Step P4: build the final extraction input for the page
+Branch A: ink template available
+- `process_pdf()` uses the aligned page image
+- computes an isolated ink image by subtracting the blank form template
+- converts both images with `array_b64(...)`
+
+Function: `array_b64(arr)` in extract.py
+Role:
+- converts a NumPy image array into base64 PNG
+
+Branch B: no ink template available
+- `process_pdf()` falls back to `load_page_b64(path)`
+
+Why this exists:
+- if available, dual-image extraction is more robust against stray printed-ink noise
+
+Step P5: extract data from the page
+Function: `extract_page(raw_b64, catalog, client, marks_b64=None)` in extract.py
+Role:
+- performs the main page extraction using the Opus model
+- injects the catalog into the prompt
+- asks for strict JSON output
+- retries transient connection/API failures
+
+What `extract_page()` is responsible for:
+- reading handwritten header fields
+- identifying circled or marked procedures
+- identifying circled diagnoses
+- collecting handwritten notes
+- returning fallback error objects if extraction fails
+
+Important internal helpers used by `extract_page()`:
+- `build_user_prompt(catalog)`
+  Role:
+  - builds the catalog-constrained extraction prompt
+- `_parse_json(text)`
+  Role:
+  - parses model output into Python data
+- `validate(result, catalog)`
+  Role:
+  - drops non-catalog codes
+- `refine(result)`
+  Role:
+  - pushes uncertain marks into `possible_marks`
+  - removes non-clinical notes like patient-name echoes
+
+Failure behavior:
+- if the model/API call fails repeatedly, `extract_page()` returns:
+  - empty header
+  - no procedures/diagnoses
+  - `flags: ["extraction_failed"]`
+  - `_error` string
+
+Step P6: attach template metadata
+Function: still inside `process_pdf()`
+Role:
+- adds `template_match` metadata to the extracted result
+- includes:
+  - state
+  - score
+  - catalog filename
+  - template_id
+
+Step P7: detect blank headers and duplicates
+Function: still inside `process_pdf()`
+Role:
+- checks `header.name` and `header.dob`
+- if both are empty, adds `blank_header`
+- if a prior page already had the same identity, adds `duplicate_of_page_N`
+
+Why this exists:
+- one PDF may contain repeated or blank encounter pages
+
+Step P8: append result and print progress log
+Function: still inside `process_pdf()`
+Role:
+- appends page result to `results`
+- prints a one-line progress log like:
+  `page  1: Henry Reinoso [known] proc=1 dx=3 notes=0 flags=[...]`
+
+Why this exists:
+- gives you live visibility into each page as it finishes
+
+Stage 5: build run metrics
+Function: `build_metrics(pdf_path, results)` in run.py
+Role:
+- creates summary counts for the run
+- includes:
+  - timestamp
+  - source PDF name
+  - pages processed
+  - pages flagged
+  - pages auto-built
+  - total procedures
+  - total diagnoses
+  - total notes
+  - flag counts
+
+Stage 6: write output files
+Function: `main()` in run.py
+Role:
+- writes the extracted page data to the results JSON file
+- writes the metrics to `run_metrics_<timestamp>.json`
+
+Current output naming behavior
+- input: `files/July-09.pdf`
+- default results output: `files/results-July-09-<time>.json`
+- metrics output: `run_metrics_<yyyymmdd_hhmmss>.json`
+
+Short Linear Call Chain
+1. `main()`
+2. `make_client()`
+3. `load_registry()`
+4. `process_pdf()`
+5. `split_pdf()`
+6. optional `build_template()`
+7. for each page:
+   - `identify_page()`
+   - `load_page_b64()`
+   - `pick_catalog()`
+   - maybe `build_catalog()`
+   - maybe `build_catalog_from_b64()`
+   - `extract_page()`
+   - `validate()`
+   - `refine()`
+8. `build_metrics()`
+9. write results JSON
+10. write metrics JSON
+
+High-Level Purpose of Each Major File in This Flow
+- run.py: CLI entry point and orchestrator
+- extract.py: page identification and final extraction logic
+- fingerprint.py: template-matching score logic
+- build_catalog.py: unknown-template onboarding path
+- mark_detect.py: blank-form template and handwritten-ink isolation
+- auth.py: client/auth creation for internal Azure path
+
+What Actually Produces the Final Results JSON
+The final page objects in the output file are mainly assembled by:
+- `extract_page()` for page content
+- `process_pdf()` for template metadata, page number, duplicate checks, and flags
+- `main()` for writing the final JSON structure to disk
+
+
+Available API Endpoints
+
+Service entry point
+- Start locally with:
+  `uvicorn api:app --host 0.0.0.0 --port 8100`
+- Local base URL:
+  `http://127.0.0.1:8100`
+
+1. GET `/chargesheet/folders`
+Purpose:
+- lists top-level folders visible in the configured Azure Blob container
+
+Response shape:
+- `container`
+- `folders`
+
+Example:
+`curl http://127.0.0.1:8100/chargesheet/folders`
+
+2. POST `/chargesheet/ingest`
+Purpose:
+- finds a source PDF under the configured practice folder
+- registers a document row
+- starts background processing
+
+Request body:
+- optional `filename`
+
+Example body:
+`{"filename":"July-09.pdf"}`
+
+Response shape:
+- `document_id`
+- `status`
+- `practice`
+- `practice_id`
+- `practice_matched`
+- `source_blob_path`
+- `pages_blob_prefix`
+
+Example:
+`curl -X POST http://127.0.0.1:8100/chargesheet/ingest -H "Content-Type: application/json" -d '{"filename":"July-09.pdf"}'`
+
+Notes:
+- if `filename` is omitted, the API picks the newest PDF under the configured practice root
+- processing is asynchronous; this call queues the job and returns immediately
+
+3. GET `/chargesheet/documents/{document_id}`
+Purpose:
+- returns document-level status and run metrics
+
+Path parameter:
+- `document_id`
+
+Typical fields returned:
+- document metadata
+- status: `queued`, `processing`, `done`, or `failed`
+- page count
+- template id
+- run metrics
+- error, if failed
+
+Example:
+`curl http://127.0.0.1:8100/chargesheet/documents/123`
+
+4. GET `/chargesheet/documents/{document_id}/pages`
+Purpose:
+- returns page-level extraction results for a document
+
+Path parameter:
+- `document_id`
+
+Response shape:
+- `document_id`
+- `pages`
+
+Each page can include:
+- header
+- confirmed procedures
+- confirmed diagnoses
+- possible marks
+- notes
+- flags
+- extraction ids
+
+Example:
+`curl http://127.0.0.1:8100/chargesheet/documents/123/pages`
+
+5. POST `/chargesheet/feedback`
+Purpose:
+- records human review feedback for incorrect or missed extractions
+
+Request body fields:
+- `document_id` required
+- `page_number` required
+- `feedback_type` required: `incorrect` or `missed`
+- `target` optional: `code`, `procedure`, `diagnosis`, `note`, `header`
+- `extraction_id` required for `incorrect`
+- `code` required for `missed`
+- optional `correct_code`
+- optional `correct_value`
+- optional `section`
+- optional `mark`
+- optional `reviewer`
+- optional `note`
+
+Example: incorrect extraction
+`curl -X POST http://127.0.0.1:8100/chargesheet/feedback -H "Content-Type: application/json" -d '{"document_id":123,"page_number":2,"feedback_type":"incorrect","extraction_id":456}'`
+
+Example: missed code
+`curl -X POST http://127.0.0.1:8100/chargesheet/feedback -H "Content-Type: application/json" -d '{"document_id":123,"page_number":2,"feedback_type":"missed","code":"I10","section":"Cardiovascular","mark":"circle"}'`
+
+Response shape:
+- `feedback_id`
+- `feedback_type`
+
+6. GET `/chargesheet/documents/{document_id}/feedback`
+Purpose:
+- lists all feedback rows recorded for a document
+
+Path parameter:
+- `document_id`
+
+Response shape:
+- `document_id`
+- `feedback`
+
+Each feedback row includes:
+- `feedback_id`
+- `page_number`
+- `extraction_id`
+- `feedback_type`
+- `target`
+- `code`
+- `correct_code`
+- `correct_value`
+- `section`
+- `mark`
+- `reviewer`
+- `note`
+- `applied`
+- `created_ts`
+
+Example:
+`curl http://127.0.0.1:8100/chargesheet/documents/123/feedback`
+
+Suggested local API test sequence
+1. Start the service:
+  `uvicorn api:app --host 0.0.0.0 --port 8100`
+2. Check folder access:
+  `curl http://127.0.0.1:8100/chargesheet/folders`
+3. Queue a file:
+  `curl -X POST http://127.0.0.1:8100/chargesheet/ingest -H "Content-Type: application/json" -d '{"filename":"July-09.pdf"}'`
+4. Copy the returned `document_id`
+5. Poll status:
+  `curl http://127.0.0.1:8100/chargesheet/documents/<document_id>`
+6. When status becomes `done`, fetch pages:
+  `curl http://127.0.0.1:8100/chargesheet/documents/<document_id>/pages`
+7. Optionally submit feedback:
+  `curl -X POST http://127.0.0.1:8100/chargesheet/feedback ...`
+
+Important runtime dependency for API mode
+- the API path depends on Azure Blob and Postgres access through `storage.py` and `db.py`
+- unlike the plain CLI run, API mode is not purely local JSON output
+- if Blob, Key Vault, or Postgres auth is not configured, API calls may fail even when `python3 run.py ...` works locally
