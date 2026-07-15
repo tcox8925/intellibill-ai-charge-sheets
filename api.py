@@ -108,16 +108,12 @@ class FeedbackRequest(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "message": "hello my world"}
-
-
-@app.get("/health/connections")
-def health_connections():
     db_status = auth.check_db_connection()
     storage_status = storage.check_blob_connection()
     connected = db_status.get("connected") and storage_status.get("connected")
     return {
         "status": "ok" if connected else "degraded",
+        "message": "hello my world",
         "database": db_status,
         "storage": storage_status,
     }
