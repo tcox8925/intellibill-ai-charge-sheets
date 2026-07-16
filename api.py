@@ -299,38 +299,33 @@ def _blob_folder(blob_path: str) -> str:
 
 def _queue_blob_ingest(blob_path: str, bg: BackgroundTasks) -> dict:
     data = storage.download_blob(blob_path)
-    sha = db.sha256_bytes(data)
     stem = os.path.splitext(os.path.basename(blob_path))[0]
     folder = _blob_folder(blob_path)
-    doc_id = db.create_document(
-        practice_id=None,
-        practice_name=folder,
-        source_blob_path=f"{storage.CONTAINER}/{blob_path}",
-        pages_blob_prefix=f"{storage.CONTAINER}/{storage.pages_prefix(stem, folder)}",
-        file_name=os.path.basename(blob_path),
-        file_sha256=sha,
-    )
+    attachment = db.get_attachment_by_path(blob_path)
+    if not attachment:
+        raise HTTPException(404, f"attachment not found for blob path: {blob_path}")
+    attachment_id = attachment["id"]
 
     worker = _process if storage.is_pdf_path(blob_path) else _process_image_blob
     source_type = "pdf" if storage.is_pdf_path(blob_path) else "image"
     logger.info("Queueing %s claim file for processing: %s", source_type, blob_path)
-    bg.add_task(worker, doc_id, stem, blob_path, data)
+    bg.add_task(worker, attachment_id, stem, blob_path, data)
     return {
-        "document_id": doc_id,
+        "document_id": attachment_id,
         "status": "queued",
         "folder": folder,
         "source_blob_path": f"{storage.CONTAINER}/{blob_path}",
-        "pages_blob_prefix": f"{storage.CONTAINER}/{storage.pages_prefix(stem, folder)}",
+        "pages_blob_prefix": f"{storage.CONTAINER}/{storage.pages_prefix(blob_path)}",
         "source_type": source_type,
     }
 
 
-def _process(document_id: int, stem: str, blob_path: str, pdf_bytes: bytes):
+def _process(attachment_id: int, stem: str, blob_path: str, pdf_bytes: bytes):
     """Background worker: split -> per-page extract -> upload page -> persist."""
     from PIL import Image
-    db.set_document_status(document_id, "processing")
     registry = _registry()
     folder = _blob_folder(blob_path)
+    document_id = attachment_id
     try:
         with tempfile.TemporaryDirectory() as tmp:
             pdf_path = os.path.join(tmp, "src.pdf")
@@ -339,11 +334,11 @@ def _process(document_id: int, stem: str, blob_path: str, pdf_bytes: bytes):
 
             def on_page(page_no, page_image_path, result):
                 # upload the rendered page, then persist page+children with paths
-                blob_path = storage.upload_page(
-                    stem, page_no, Image.open(page_image_path), practice=folder)
+                uploaded_blob_path = storage.upload_page(
+                    blob_path, page_no, Image.open(page_image_path))
                 result["template_match"] = result.get("template_match", {})
                 db.persist_page(document_id, result,
-                                page_blob_path=f"{storage.CONTAINER}/{blob_path}")
+                                page_blob_path=f"{storage.CONTAINER}/{uploaded_blob_path}")
 
             results, metrics = run.process_pdf(
                 pdf_path, _client(), registry,
@@ -359,14 +354,14 @@ def _process(document_id: int, stem: str, blob_path: str, pdf_bytes: bytes):
         raise
 
 
-def _process_image_blob(document_id: int, stem: str, blob_path: str,
+def _process_image_blob(attachment_id: int, stem: str, blob_path: str,
                         image_bytes: bytes):
     """Background worker for single image blobs."""
     from PIL import Image
 
-    db.set_document_status(document_id, "processing")
     registry = _registry()
     folder = _blob_folder(blob_path)
+    document_id = attachment_id
     try:
         with tempfile.TemporaryDirectory() as tmp:
             image_path = os.path.join(tmp, os.path.basename(blob_path))
@@ -376,7 +371,7 @@ def _process_image_blob(document_id: int, stem: str, blob_path: str,
             payload = image_ocr.process_image(image_path, _client(), registry)
             normalized_path = image_ocr.normalize_image_to_png(image_path, tmp)
             uploaded_blob_path = storage.upload_page(
-                stem, 1, Image.open(normalized_path), practice=folder)
+                blob_path, 1, Image.open(normalized_path))
 
         result = payload["pages"][0]
         db.persist_page(document_id, result,

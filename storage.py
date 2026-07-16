@@ -165,26 +165,27 @@ def is_image_path(blob_path: str) -> bool:
     }
 
 
-def pages_prefix(pdf_stem: str, practice: Optional[str] = None) -> str:
-    return f"{practice or PRACTICE}/pages/{pdf_stem}/"
+def pages_prefix(source_blob_path: str) -> str:
+    parent = os.path.dirname(source_blob_path).strip("/")
+    stem = os.path.splitext(os.path.basename(source_blob_path))[0]
+    if parent:
+        return f"{parent}/{stem}-"
+    return f"{stem}-"
 
 
-def page_blob_path(pdf_stem: str, page_number: int,
-                   practice: Optional[str] = None) -> str:
-    return f"{pages_prefix(pdf_stem, practice)}page-{page_number:02d}.png"
+def page_blob_path(source_blob_path: str, page_number: int) -> str:
+    return f"{pages_prefix(source_blob_path)}page-{page_number:02d}.png"
 
 
-def upload_page(pdf_stem: str, page_number: int,
-                image: "Image.Image | bytes",
-                practice: Optional[str] = None) -> str:
-    """Upload one rendered page PNG; return its blob path (store this in
-    wpo.chargesheet_pages.page_blob_path)."""
+def upload_page(source_blob_path: str, page_number: int,
+                image: "Image.Image | bytes") -> str:
+    """Upload one rendered page PNG; return its blob path."""
     if isinstance(image, Image.Image):
         buf = io.BytesIO()
         image.convert("RGB").save(buf, format="PNG")
         data = buf.getvalue()
     else:
         data = image
-    path = page_blob_path(pdf_stem, page_number, practice)
+    path = page_blob_path(source_blob_path, page_number)
     _container().upload_blob(name=path, data=data, overwrite=True)
     return path

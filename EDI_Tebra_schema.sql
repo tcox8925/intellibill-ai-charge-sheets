@@ -1,0 +1,20 @@
+CREATE TABLE "EDI_Tebra".attachments (
+    id serial4 NOT NULL,
+    type_id uuid NULL,
+    clm_att_path text NULL,
+    clm_att_filename text NULL,
+    clm_att_datetime timestamp NULL,
+    clm_login varchar(500) NULL,
+    created_at timestamp NOT NULL,
+    updated_at timestamp NOT NULL,
+    attachment_type varchar(50) DEFAULT 'claim'::character varying NULL,
+    user_id uuid NULL,
+    assigned_to_id uuid NULL,
+    status varchar(5) DEFAULT 'G'::character varying NOT NULL,
+    raw_extracted_data jsonb NULL,
+    processed_extracted_data jsonb NULL,
+    processed bool DEFAULT false NOT NULL,
+    sha varchar(64) NULL,
+    CONSTRAINT claim_attachments_pkey PRIMARY KEY (id),
+    CONSTRAINT attachments_assigned_to_id_fkey FOREIGN KEY (assigned_to_id) REFERENCES rcm.users(id)
+);

@@ -17,7 +17,8 @@ from typing import Optional
 from auth import get_kv_client, get_pg_connection, reconnect_if_stale
 
 SCHEMA = "wpo"
-ATTACHMENTS_TABLE = '"EDI_Tebra".attachments'
+EDI_TEBRA_SCHEMA = '"EDI_Tebra"'
+ATTACHMENTS_TABLE = f"{EDI_TEBRA_SCHEMA}.attachments"
 
 
 def _conn():
@@ -92,6 +93,29 @@ def list_attachment_entries(limit: int = 10, conn=None):
             conn.close()
 
 
+def get_attachment_by_path(clm_att_path: str, conn=None) -> Optional[dict]:
+    """Return the first attachment row for the given blob path."""
+    own = conn is None
+    conn = conn or _conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""SELECT *
+                      FROM {ATTACHMENTS_TABLE}
+                     WHERE clm_att_path=%s
+                     LIMIT 1""",
+                (clm_att_path,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            cols = [desc[0] for desc in cur.description]
+            return dict(zip(cols, row))
+    finally:
+        if own:
+            conn.close()
+
+
 def get_attachment_by_sha(file_sha256: str, conn=None) -> Optional[dict]:
     """Return the first attachment row for the given SHA as a dictionary."""
     own = conn is None
@@ -150,6 +174,7 @@ def resolve_practice(practice_name: str, conn=None):
 
 def create_document(practice_id, practice_name: str, source_blob_path: str,
                     pages_blob_prefix: str, file_name: str, file_sha256: str,
+                    current_attachment_path: Optional[str] = None,
                     conn=None) -> int:
     """Register a source PDF as a run. Idempotent on file_sha256: a re-ingest
     of the same bytes returns the existing document_id (resume-friendly).
@@ -159,7 +184,8 @@ def create_document(practice_id, practice_name: str, source_blob_path: str,
     conn = conn or _conn()
     try:
         duplicate_attachment = get_attachment_by_sha(file_sha256, conn=conn)
-        if duplicate_attachment:
+        if (duplicate_attachment and
+                duplicate_attachment.get("clm_att_path") != current_attachment_path):
             raise ValueError(
                 "another file with the same sha256 is present: "
                 f"id={duplicate_attachment.get('id')}, "

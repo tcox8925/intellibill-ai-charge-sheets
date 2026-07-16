@@ -18,11 +18,13 @@ like the 96372 read).
     python mark_detect.py <pdf> [--overlay 8]     # write marks + overlay images
 """
 
-import argparse, glob, os, subprocess
+import argparse, os
 import numpy as np
 import cv2
 from scipy import ndimage
 from PIL import Image
+
+from run import split_pdf
 
 W, H = 2122, 1649          # common upright frame
 INK_THRESH = 55            # residual darkness that counts as ink
@@ -137,13 +139,6 @@ def overlay(page_gray, marks, out_path):
         cv2.putText(im, m["kind"], (x, max(0, y - 4)),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, c, 1, cv2.LINE_AA)
     cv2.imwrite(out_path, im)
-
-
-def split_pdf(pdf, out_dir, dpi=200):
-    os.makedirs(out_dir, exist_ok=True)
-    subprocess.run(["pdftoppm", "-png", "-r", str(dpi), pdf,
-                    os.path.join(out_dir, "page")], check=True)
-    return sorted(glob.glob(os.path.join(out_dir, "page-*.png")))
 
 
 def main():
