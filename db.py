@@ -462,6 +462,42 @@ def get_document(document_id: int, conn=None) -> Optional[dict]:
     try:
         with conn.cursor() as cur:
             cur.execute(
+                f"""SELECT id, clm_att_path, clm_att_filename, attachment_type,
+                           parent_attachment_id, processed, status,
+                           extraction_metadata, created_at, updated_at
+                      FROM {ATTACHMENTS_TABLE}
+                     WHERE id=%s
+                     LIMIT 1""",
+                (document_id,))
+            row = cur.fetchone()
+            if row:
+                cols = [d[0] for d in cur.description]
+                attachment = dict(zip(cols, row))
+                cur.execute(
+                    f"""SELECT COUNT(*)
+                          FROM {ATTACHMENTS_TABLE}
+                         WHERE parent_attachment_id=%s""",
+                    (document_id,))
+                child_page_count = cur.fetchone()[0]
+                return {
+                    "document_id": attachment["id"],
+                    "source_blob_path": attachment.get("clm_att_path"),
+                    "pages_blob_prefix": _pages_blob_prefix_for_path(
+                        attachment.get("clm_att_path")),
+                    "file_name": attachment.get("clm_att_filename"),
+                    "status": _attachment_status(
+                        bool(attachment.get("processed")), child_page_count),
+                    "attachment_type": attachment.get("attachment_type"),
+                    "parent_attachment_id": attachment.get("parent_attachment_id"),
+                    "processed": bool(attachment.get("processed")),
+                    "child_page_count": child_page_count,
+                    "run_metrics": None,
+                    "error": None,
+                    "created_ts": attachment.get("created_at"),
+                    "completed_ts": attachment.get("updated_at") if attachment.get("processed") else None,
+                    "extraction_metadata": attachment.get("extraction_metadata"),
+                }
+            cur.execute(
                 f"""SELECT document_id, practice_id, practice_name,
                            source_blob_path, pages_blob_prefix, file_name,
                            page_count, template_id, status, error, run_metrics,
@@ -483,6 +519,50 @@ def get_page_results(document_id: int, conn=None) -> list[dict]:
     conn = conn or _conn()
     try:
         with conn.cursor() as cur:
+            cur.execute(
+                f"""SELECT 1
+                      FROM {ATTACHMENTS_TABLE}
+                     WHERE id=%s
+                     LIMIT 1""",
+                (document_id,))
+            attachment_exists = cur.fetchone() is not None
+            cur.execute(
+                f"""SELECT id, clm_att_path, clm_att_filename,
+                           raw_extracted_data, processed_extracted_data,
+                           extraction_metadata, attachment_type,
+                           created_at, updated_at
+                      FROM {ATTACHMENTS_TABLE}
+                     WHERE parent_attachment_id=%s
+                     ORDER BY COALESCE((extraction_metadata->>'page_number')::int, 0),
+                              id""",
+                (document_id,))
+            child_rows = cur.fetchall()
+            if child_rows:
+                cols = [d[0] for d in cur.description]
+                pages = []
+                for row in child_rows:
+                    child = dict(zip(cols, row))
+                    raw_result = child.get("raw_extracted_data") or {}
+                    processed_result = child.get("processed_extracted_data") or {}
+                    metadata = child.get("extraction_metadata") or {}
+                    template_match = metadata.get("template_match", {}) or {}
+                    pages.append({
+                        "page_id": child["id"],
+                        "page_number": metadata.get("page_number") or raw_result.get("page") or processed_result.get("page"),
+                        "page_blob_path": child.get("clm_att_path"),
+                        "header": processed_result.get("header") or raw_result.get("header") or {},
+                        "flags": metadata.get("flags", []),
+                        "template_state": template_match.get("state"),
+                        "template_score": template_match.get("score"),
+                        "template_ok": metadata.get("template_ok"),
+                        "raw_result": raw_result,
+                        "processed_result": processed_result,
+                        "extractions": _attachment_extractions(processed_result),
+                        "notes": processed_result.get("notes", []),
+                    })
+                return pages
+            if attachment_exists:
+                return []
             cur.execute(
                 f"""SELECT page_id, page_number, page_blob_path, header, flags,
                            template_state, template_score
@@ -600,6 +680,62 @@ def _build_extraction_metadata_payload(
         "dob": (header.get("dob") or "").strip() or None,
         "flags": page_result.get("flags", []),
     }
+
+
+def _attachment_status(processed: bool, child_page_count: int) -> str:
+    if processed:
+        return "done"
+    if child_page_count > 0:
+        return "processing"
+    return "queued"
+
+
+def _pages_blob_prefix_for_path(clm_att_path: Optional[str]) -> Optional[str]:
+    if not clm_att_path:
+        return None
+    parent = os.path.dirname(clm_att_path).strip("/")
+    stem = os.path.splitext(os.path.basename(clm_att_path))[0]
+    if parent:
+        return f"{parent}/{stem}-"
+    return f"{stem}-"
+
+
+def _attachment_extractions(processed_result: dict) -> list[dict]:
+    extractions = []
+    for item in processed_result.get("circled_procedures", []) or []:
+        extractions.append({
+            "kind": "procedure",
+            "status": "confirmed",
+            "code": item.get("code"),
+            "description": item.get("description"),
+            "section": item.get("section"),
+            "mark": item.get("mark"),
+            "reason": item.get("reason"),
+            "confidence": item.get("confidence"),
+        })
+    for item in processed_result.get("circled_diagnoses", []) or []:
+        extractions.append({
+            "kind": "diagnosis",
+            "status": "confirmed",
+            "code": item.get("code"),
+            "description": item.get("description"),
+            "section": item.get("section"),
+            "mark": item.get("mark"),
+            "reason": item.get("reason"),
+            "confidence": item.get("confidence"),
+        })
+    for item in processed_result.get("possible_marks", []) or []:
+        extractions.append({
+            "kind": "diagnosis" if _looks_icd10(item.get("code", "")) else "procedure",
+            "status": "possible",
+            "code": item.get("code"),
+            "description": item.get("description"),
+            "section": item.get("section"),
+            "mark": item.get("mark"),
+            "reason": item.get("reason"),
+            "confidence": item.get("confidence"),
+        })
+    return extractions
 
 
 def _looks_icd10(code: str) -> bool:

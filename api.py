@@ -5,7 +5,7 @@ storage (storage.py) and Postgres (db.py).
 
 Endpoints
     GET  /health                                      simple service health check
-    POST /chargesheet/extract                         upload one PDF and return extraction JSON
+    POST /chargesheet/extract                         process one blob path synchronously
     GET  /chargesheet/folders                         list container folders
     POST /chargesheet/ingest                          {filename?} -> document_id
     GET  /chargesheet/documents/{document_id}         status + metrics
@@ -30,7 +30,7 @@ import logging
 from typing import Dict, List
 from typing import Optional, Union
 
-from fastapi import FastAPI, BackgroundTasks, File, HTTPException, UploadFile
+from fastapi import FastAPI, BackgroundTasks, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, model_validator
 
@@ -152,39 +152,10 @@ def health():
 
 
 @app.post("/chargesheet/extract")
-async def extract_pdf(file: UploadFile = File(...), pages: Optional[str] = None):
-    filename = file.filename or "upload.pdf"
-    if not filename.lower().endswith(".pdf"):
-        raise HTTPException(400, "uploaded file must be a PDF")
-
-    try:
-        want = {int(x) for x in pages.split(",") if x.strip()} if pages else None
-    except ValueError:
-        raise HTTPException(400, "pages must be a comma-separated 1-based page list")
-
-    pdf_bytes = await file.read()
-    if not pdf_bytes:
-        raise HTTPException(400, "uploaded file is empty")
-
-    with tempfile.TemporaryDirectory() as tmp:
-        pdf_path = os.path.join(tmp, filename)
-        with open(pdf_path, "wb") as f:
-            f.write(pdf_bytes)
-
-        results, metrics = run.process_pdf(
-            pdf_path,
-            _client(),
-            run.load_registry(),
-            pages_dir=os.path.join(tmp, "pages"),
-            want=want,
-        )
-
-    return {
-        "source_pdf": filename,
-        "page_count": len(results),
-        "pages": results,
-        "metrics": metrics,
-    }
+def extract_blob_sync(req: IngestRequest):
+    blob_path = _resolve_ingest_target(req)
+    data = storage.download_blob(blob_path)
+    return _run_blob_ingest_sync(blob_path, data)
 
 @app.get("/chargesheet/folders")
 def folders():
@@ -297,32 +268,64 @@ def _blob_folder(blob_path: str) -> str:
     return blob_path.split("/", 1)[0]
 
 
-def _queue_blob_ingest(blob_path: str, bg: BackgroundTasks) -> dict:
-    data = storage.download_blob(blob_path)
-    stem = os.path.splitext(os.path.basename(blob_path))[0]
-    folder = _blob_folder(blob_path)
+def _parse_pages(pages: Optional[str]):
+    try:
+        return {int(x) for x in pages.split(",") if x.strip()} if pages else None
+    except ValueError:
+        raise HTTPException(400, "pages must be a comma-separated 1-based page list")
+
+
+def _resolve_ingest_context(blob_path: str) -> dict:
     attachment = db.get_attachment_by_path(blob_path)
     if not attachment:
         raise HTTPException(404, f"attachment not found for blob path: {blob_path}")
-    attachment_id = attachment["id"]
-    attachment_type = attachment.get("attachment_type")
 
-    worker = _process if storage.is_pdf_path(blob_path) else _process_image_blob
-    source_type = "pdf" if storage.is_pdf_path(blob_path) else "image"
-    logger.info("Queueing %s claim file for processing: %s", source_type, blob_path)
-    bg.add_task(worker, attachment_id, attachment_type, stem, blob_path, data)
     return {
-        "document_id": attachment_id,
+        "attachment_id": attachment["id"],
+        "attachment_type": attachment.get("attachment_type"),
+        "stem": os.path.splitext(os.path.basename(blob_path))[0],
+        "folder": _blob_folder(blob_path),
+        "source_type": "pdf" if storage.is_pdf_path(blob_path) else "image",
+    }
+
+
+def _run_blob_ingest_sync(blob_path: str, data: bytes, *, want=None) -> dict:
+    if not (storage.is_pdf_path(blob_path) or storage.is_image_path(blob_path)):
+        raise HTTPException(400, "blob_path must point to a PDF or supported image")
+
+    context = _resolve_ingest_context(blob_path)
+    worker = _process if context["source_type"] == "pdf" else _process_image_blob
+    return worker(
+        context["attachment_id"],
+        context["attachment_type"],
+        context["stem"],
+        blob_path,
+        data,
+        want=want,
+    )
+
+
+def _queue_blob_ingest(blob_path: str, bg: BackgroundTasks) -> dict:
+    data = storage.download_blob(blob_path)
+    context = _resolve_ingest_context(blob_path)
+
+    worker = _process if context["source_type"] == "pdf" else _process_image_blob
+    logger.info("Queueing %s claim file for processing: %s",
+                context["source_type"], blob_path)
+    bg.add_task(worker, context["attachment_id"], context["attachment_type"],
+                context["stem"], blob_path, data)
+    return {
+        "document_id": context["attachment_id"],
         "status": "queued",
-        "folder": folder,
+        "folder": context["folder"],
         "source_blob_path": f"{storage.CONTAINER}/{blob_path}",
         "pages_blob_prefix": f"{storage.CONTAINER}/{storage.pages_prefix(blob_path)}",
-        "source_type": source_type,
+        "source_type": context["source_type"],
     }
 
 
 def _process(attachment_id: int, attachment_type: str, stem: str,
-             blob_path: str, pdf_bytes: bytes):
+             blob_path: str, pdf_bytes: bytes, want=None):
     """Background worker: split -> per-page extract -> upload page -> persist."""
     from PIL import Image
     registry = _registry()
@@ -345,20 +348,20 @@ def _process(attachment_id: int, attachment_type: str, stem: str,
 
             results, metrics = run.process_pdf(
                 pdf_path, _client(), registry,
-                pages_dir=os.path.join(tmp, "pages"), on_page=on_page)
+                pages_dir=os.path.join(tmp, "pages"), want=want, on_page=on_page)
 
         tid = next((r.get("template_match", {}).get("template_id")
                     for r in results if r.get("template_match", {}).get("template_id")), None)
-        db.set_document_status(document_id, "done", page_count=len(results),
-                               template_id=tid, run_metrics=metrics)
-        mark_completed(blob_path, document_id)
+        _finalize_processed_blob(document_id, blob_path, len(results), tid, metrics)
+        return _build_processed_response(
+            document_id, folder, blob_path, "pdf", results, metrics)
     except Exception as e:
-        db.set_document_status(document_id, "failed", error=str(e))
+        _mark_processing_failed(document_id, e)
         raise
 
 
 def _process_image_blob(attachment_id: int, attachment_type: str, stem: str,
-                        blob_path: str, image_bytes: bytes):
+                        blob_path: str, image_bytes: bytes, want=None):
     """Background worker for single image blobs."""
     from PIL import Image
 
@@ -381,12 +384,49 @@ def _process_image_blob(attachment_id: int, attachment_type: str, stem: str,
                            page_blob_path=uploaded_blob_path,
                            attachment_type=attachment_type)
         tid = result.get("template_match", {}).get("template_id")
-        db.set_document_status(document_id, "done", page_count=1,
-                               template_id=tid, run_metrics=payload["metrics"])
-        mark_completed(blob_path, document_id)
+        _finalize_processed_blob(document_id, blob_path, 1, tid,
+                                 payload["metrics"])
+        return _build_processed_response(
+            document_id, folder, blob_path, "image",
+            payload["pages"], payload["metrics"])
     except Exception as e:
-        db.set_document_status(document_id, "failed", error=str(e))
+        _mark_processing_failed(document_id, e)
         raise
+
+
+def _finalize_processed_blob(document_id: int, blob_path: str, page_count: int,
+                             template_id: Optional[str], run_metrics: dict):
+    try:
+        db.set_document_status(document_id, "done", page_count=page_count,
+                               template_id=template_id, run_metrics=run_metrics)
+    except Exception as exc:
+        logger.warning("Skipping legacy document status update for %s: %s",
+                       document_id, exc)
+    mark_completed(blob_path, document_id)
+
+
+def _mark_processing_failed(document_id: int, error: Exception):
+    try:
+        db.set_document_status(document_id, "failed", error=str(error))
+    except Exception as exc:
+        logger.warning("Skipping legacy document failure update for %s: %s",
+                       document_id, exc)
+
+
+def _build_processed_response(document_id: int, folder: str, blob_path: str,
+                              source_type: str, pages: list,
+                              metrics: dict) -> dict:
+    return {
+        "document_id": document_id,
+        "status": "done",
+        "folder": folder,
+        "source_blob_path": f"{storage.CONTAINER}/{blob_path}",
+        "pages_blob_prefix": f"{storage.CONTAINER}/{storage.pages_prefix(blob_path)}",
+        "source_type": source_type,
+        "page_count": len(pages),
+        "pages": pages,
+        "metrics": metrics,
+    }
 
 
 @app.get("/chargesheet/documents/{document_id}")
