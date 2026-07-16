@@ -20,6 +20,7 @@ reads a connection string from the environment.
 
 import io
 import os
+import re
 from typing import Optional
 from PIL import Image
 
@@ -89,6 +90,37 @@ def list_folders() -> list[str]:
         if name.endswith("/"):
             folders.append(name[:-1])
     return sorted(folders)
+
+
+def list_files(prefix: str) -> list[str]:
+    """List blob files directly under a prefix, excluding nested children."""
+    cc = _container()
+    normalized = prefix.rstrip("/") + "/"
+    files = []
+    for blob in cc.list_blobs(name_starts_with=normalized):
+        rel = blob.name[len(normalized):]
+        if not rel or "/" in rel:
+            continue
+        files.append(blob.name)
+    return sorted(files)
+
+
+def list_claim_files(entity_folder: str,
+                     exchange_folder: str = "Exchange",
+                     documents_folder: str = "Documents",
+                     claim_files_folder: str = "Claim files") -> list[str]:
+    """List files under <entity>/Exchange/Documents/Claim files/."""
+    prefix = "/".join([
+        entity_folder.strip("/"),
+        exchange_folder.strip("/"),
+        documents_folder.strip("/"),
+        claim_files_folder.strip("/"),
+    ])
+    return list_files(prefix)
+
+
+def is_entity_group_folder(folder_name: str) -> bool:
+    return bool(re.fullmatch(r"\d+-\d+", folder_name or ""))
 
 
 def find_source_pdf(filename: Optional[str] = None,

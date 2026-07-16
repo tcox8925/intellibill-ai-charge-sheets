@@ -26,6 +26,7 @@ Auth is the same KV/VNet story as pch-eob-pipeline (via run.make_client / db).
 
 import os
 import tempfile
+from typing import Dict, List
 from typing import Optional
 
 from fastapi import FastAPI, BackgroundTasks, File, HTTPException, UploadFile
@@ -38,6 +39,17 @@ import db
 import run
 
 app = FastAPI(title="834 Charge-sheet OCR", version="1.0")
+
+INGEST_ALL_EXCLUDE = [
+    "Archive",
+    "Partner Integrations",
+    "check_attachments",
+    "claim_attachments",
+    "medical-extraction",
+    "ml-models",
+    "patient_attachments",
+    "users_logo",
+]
 
 app.add_middleware(
     CORSMiddleware,
@@ -75,6 +87,12 @@ class IngestRequest(BaseModel):
     # practice is GLOBAL (storage.PRACTICE) and render DPI is fixed — neither
     # is part of the payload. The only input is an optional filename.
     filename: Optional[str] = None
+
+
+class IngestAllResult(BaseModel):
+    queued: List[Dict[str, object]]
+    skipped: List[Dict[str, object]]
+    excluded_folders: List[str]
 
 
 class FeedbackRequest(BaseModel):
@@ -166,25 +184,81 @@ def ingest(req: IngestRequest, bg: BackgroundTasks):
     if not src:
         raise HTTPException(404, f"no PDF found under {practice}/"
                                  + (f" matching {req.filename}" if req.filename else ""))
-    data = storage.download_pdf(src)
+    return _queue_blob_ingest(src, practice, bg)
+
+
+@app.post("/chargesheet/ingest-all")
+def ingest_all(bg: BackgroundTasks) -> IngestAllResult:
+    folder_payload = folders()
+    queued = []
+    skipped = []
+
+    for folder_name in folder_payload["folders"]:
+        if folder_name in INGEST_ALL_EXCLUDE:
+            skipped.append({"folder": folder_name, "reason": "excluded"})
+            continue
+        if not storage.is_entity_group_folder(folder_name):
+            skipped.append({"folder": folder_name, "reason": "not_entity_group_folder"})
+            continue
+
+        claim_files = storage.list_claim_files(folder_name)
+        if not claim_files:
+            skipped.append({"folder": folder_name, "reason": "no_claim_files"})
+            continue
+
+        for blob_path in claim_files:
+            if is_processed(blob_path):
+                skipped.append({"folder": folder_name, "blob_path": blob_path,
+                                "reason": "already_processed"})
+                continue
+
+            queue_result = _queue_blob_ingest(blob_path, folder_name, bg)
+            queued.append(queue_result)
+
+    return IngestAllResult(
+        queued=queued,
+        skipped=skipped,
+        excluded_folders=INGEST_ALL_EXCLUDE,
+    )
+
+
+def is_processed(blob_path: str) -> bool:
+    """Placeholder for dedupe logic; currently processes every file once seen."""
+    return False
+
+
+def mark_completed(blob_path: str, document_id: int):
+    """Placeholder completion hook for future ingest-all tracking."""
+    return {"blob_path": blob_path, "document_id": document_id, "completed": True}
+
+
+def _queue_blob_ingest(blob_path: str, practice: str, bg: BackgroundTasks) -> dict:
+    data = storage.download_pdf(blob_path)
     sha = db.sha256_bytes(data)
-    stem = os.path.splitext(os.path.basename(src))[0]
-    practice_id, practice_name = db.resolve_practice(practice)   # from "EDI_Tebra".practice
+    stem = os.path.splitext(os.path.basename(blob_path))[0]
+    practice_id, practice_name = db.resolve_practice(practice)
     doc_id = db.create_document(
-        practice_id=practice_id, practice_name=practice_name,
-        source_blob_path=f"{storage.CONTAINER}/{src}",
-        pages_blob_prefix=f"{storage.CONTAINER}/{storage.pages_prefix(stem)}",
-        file_name=os.path.basename(src), file_sha256=sha)
+        practice_id=practice_id,
+        practice_name=practice_name,
+        source_blob_path=f"{storage.CONTAINER}/{blob_path}",
+        pages_blob_prefix=f"{storage.CONTAINER}/{storage.pages_prefix(stem, practice)}",
+        file_name=os.path.basename(blob_path),
+        file_sha256=sha,
+    )
 
-    bg.add_task(_process, doc_id, stem, data)
-    return {"document_id": doc_id, "status": "queued",
-            "practice": practice_name, "practice_id": practice_id,
-            "practice_matched": practice_id is not None,
-            "source_blob_path": f"{storage.CONTAINER}/{src}",
-            "pages_blob_prefix": f"{storage.CONTAINER}/{storage.pages_prefix(stem)}"}
+    bg.add_task(_process, doc_id, practice, stem, blob_path, data)
+    return {
+        "document_id": doc_id,
+        "status": "queued",
+        "practice": practice_name,
+        "practice_id": practice_id,
+        "practice_matched": practice_id is not None,
+        "source_blob_path": f"{storage.CONTAINER}/{blob_path}",
+        "pages_blob_prefix": f"{storage.CONTAINER}/{storage.pages_prefix(stem, practice)}",
+    }
 
 
-def _process(document_id: int, stem: str, pdf_bytes: bytes):
+def _process(document_id: int, practice: str, stem: str, blob_path: str, pdf_bytes: bytes):
     """Background worker: split -> per-page extract -> upload page -> persist."""
     from PIL import Image
     db.set_document_status(document_id, "processing")
@@ -198,7 +272,7 @@ def _process(document_id: int, stem: str, pdf_bytes: bytes):
             def on_page(page_no, page_image_path, result):
                 # upload the rendered page, then persist page+children with paths
                 blob_path = storage.upload_page(
-                    stem, page_no, Image.open(page_image_path))
+                    stem, page_no, Image.open(page_image_path), practice=practice)
                 result["template_match"] = result.get("template_match", {})
                 db.persist_page(document_id, result,
                                 page_blob_path=f"{storage.CONTAINER}/{blob_path}")
@@ -211,6 +285,7 @@ def _process(document_id: int, stem: str, pdf_bytes: bytes):
                     for r in results if r.get("template_match", {}).get("template_id")), None)
         db.set_document_status(document_id, "done", page_count=len(results),
                                template_id=tid, run_metrics=metrics)
+        mark_completed(blob_path, document_id)
     except Exception as e:
         db.set_document_status(document_id, "failed", error=str(e))
         raise
