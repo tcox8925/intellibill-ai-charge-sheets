@@ -305,11 +305,12 @@ def _queue_blob_ingest(blob_path: str, bg: BackgroundTasks) -> dict:
     if not attachment:
         raise HTTPException(404, f"attachment not found for blob path: {blob_path}")
     attachment_id = attachment["id"]
+    attachment_type = attachment.get("attachment_type")
 
     worker = _process if storage.is_pdf_path(blob_path) else _process_image_blob
     source_type = "pdf" if storage.is_pdf_path(blob_path) else "image"
     logger.info("Queueing %s claim file for processing: %s", source_type, blob_path)
-    bg.add_task(worker, attachment_id, stem, blob_path, data)
+    bg.add_task(worker, attachment_id, attachment_type, stem, blob_path, data)
     return {
         "document_id": attachment_id,
         "status": "queued",
@@ -320,7 +321,8 @@ def _queue_blob_ingest(blob_path: str, bg: BackgroundTasks) -> dict:
     }
 
 
-def _process(attachment_id: int, stem: str, blob_path: str, pdf_bytes: bytes):
+def _process(attachment_id: int, attachment_type: str, stem: str,
+             blob_path: str, pdf_bytes: bytes):
     """Background worker: split -> per-page extract -> upload page -> persist."""
     from PIL import Image
     registry = _registry()
@@ -337,8 +339,9 @@ def _process(attachment_id: int, stem: str, blob_path: str, pdf_bytes: bytes):
                 uploaded_blob_path = storage.upload_page(
                     blob_path, page_no, Image.open(page_image_path))
                 result["template_match"] = result.get("template_match", {})
-                db.persist_page(document_id, result,
-                                page_blob_path=f"{storage.CONTAINER}/{uploaded_blob_path}")
+                db.persist_page_v2(document_id, result,
+                                   page_blob_path=uploaded_blob_path,
+                                   attachment_type=attachment_type)
 
             results, metrics = run.process_pdf(
                 pdf_path, _client(), registry,
@@ -354,8 +357,8 @@ def _process(attachment_id: int, stem: str, blob_path: str, pdf_bytes: bytes):
         raise
 
 
-def _process_image_blob(attachment_id: int, stem: str, blob_path: str,
-                        image_bytes: bytes):
+def _process_image_blob(attachment_id: int, attachment_type: str, stem: str,
+                        blob_path: str, image_bytes: bytes):
     """Background worker for single image blobs."""
     from PIL import Image
 
@@ -374,8 +377,9 @@ def _process_image_blob(attachment_id: int, stem: str, blob_path: str,
                 blob_path, 1, Image.open(normalized_path))
 
         result = payload["pages"][0]
-        db.persist_page(document_id, result,
-                        page_blob_path=f"{storage.CONTAINER}/{uploaded_blob_path}")
+        db.persist_page_v2(document_id, result,
+                           page_blob_path=uploaded_blob_path,
+                           attachment_type=attachment_type)
         tid = result.get("template_match", {}).get("template_id")
         db.set_document_status(document_id, "done", page_count=1,
                                template_id=tid, run_metrics=payload["metrics"])

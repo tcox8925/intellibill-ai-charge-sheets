@@ -12,13 +12,43 @@ inherits the same KV/VNet story as pch-eob-pipeline. Nothing is hardcoded here.
 
 import json
 import hashlib
-from typing import Optional
+import os
+from datetime import datetime
+from typing import Any, Dict, List, Optional, TypedDict
+from zoneinfo import ZoneInfo
 
 from auth import get_kv_client, get_pg_connection, reconnect_if_stale
 
 SCHEMA = "wpo"
 EDI_TEBRA_SCHEMA = '"EDI_Tebra"'
 ATTACHMENTS_TABLE = f"{EDI_TEBRA_SCHEMA}.attachments"
+ATTACHMENT_CLM_LOGIN = os.environ["ATTACHMENT_CLM_LOGIN"]
+ATTACHMENT_USER_ID = os.environ["ATTACHMENT_USER_ID"]
+ATTACHMENT_ASSIGNED_TO_ID = os.environ.get("ATTACHMENT_ASSIGNED_TO_ID") or None
+ATTACHMENT_STATUS = "G"
+
+
+JSONDict = Dict[str, Any]
+
+
+class ProcessedExtractionPayload(TypedDict):
+    page: Optional[int]
+    header: JSONDict
+    circled_procedures: List[JSONDict]
+    circled_diagnoses: List[JSONDict]
+    possible_marks: List[JSONDict]
+    notes: List[JSONDict]
+
+
+class ExtractionMetadataPayload(TypedDict):
+    page_blob_path: str
+    page_number: Optional[int]
+    template_ok: Optional[bool]
+    template_match: JSONDict
+    catalog_used: Optional[str]
+    patient_name: Optional[str]
+    dob: Optional[str]
+    flags: List[Any]
 
 
 def _conn():
@@ -331,6 +361,56 @@ def persist_page(document_id: int, page_result: dict, page_blob_path: str,
             conn.close()
 
 
+def persist_page_v2(document_id: int, page_result: dict, page_blob_path: str,
+                    attachment_type: str, conn=None) -> int:
+    """Insert one extracted page as a child attachment row."""
+    own = conn is None
+    conn = conn or _conn()
+    try:
+        processed_payload = _build_processed_payload(page_result)
+        metadata_payload = _build_extraction_metadata_payload(
+            page_result, page_blob_path)
+        page_file_name = os.path.basename(page_blob_path)
+        clm_att_datetime = _current_cst_timestamp()
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""INSERT INTO {ATTACHMENTS_TABLE}
+                        (type_id, clm_att_path, clm_att_filename,
+                         clm_att_datetime, clm_login, created_at, updated_at,
+                         attachment_type, parent_attachment_id, user_id,
+                         assigned_to_id, status, raw_extracted_data,
+                         processed_extracted_data, extraction_metadata,
+                         processed, sha)
+                    VALUES (%s, %s, %s, %s, %s, now(), now(), %s, %s, %s, %s,
+                            %s, %s::jsonb, %s::jsonb, %s::jsonb, %s, %s)
+                    RETURNING id""",
+                (
+                    None,
+                    page_blob_path,
+                    page_file_name,
+                    clm_att_datetime,
+                    ATTACHMENT_CLM_LOGIN,
+                    attachment_type,
+                    document_id,
+                    ATTACHMENT_USER_ID,
+                    ATTACHMENT_ASSIGNED_TO_ID,
+                    ATTACHMENT_STATUS,
+                    json.dumps(page_result),
+                    json.dumps(processed_payload),
+                    json.dumps(metadata_payload),
+                    True,
+                    None,
+                ),
+            )
+            row = cur.fetchone()
+        if own:
+            conn.commit()
+        return row[0]
+    finally:
+        if own:
+            conn.close()
+
+
 # ---------- feedback (the two review signals) ------------------------------
 
 def record_feedback(document_id: int, page_number: int, feedback_type: str, *,
@@ -488,6 +568,38 @@ def _as_bool(v):
     if isinstance(v, str):
         return v.strip().lower() in ("true", "yes", "1")
     return None
+
+
+def _current_cst_timestamp() -> datetime:
+    return datetime.now(ZoneInfo("America/Chicago"))
+
+
+def _build_processed_payload(page_result: dict) -> ProcessedExtractionPayload:
+    return {
+        "page": page_result.get("page"),
+        "header": page_result.get("header", {}) or {},
+        "circled_procedures": page_result.get("circled_procedures", []),
+        "circled_diagnoses": page_result.get("circled_diagnoses", []),
+        "possible_marks": page_result.get("possible_marks", []),
+        "notes": page_result.get("notes", []),
+    }
+
+
+def _build_extraction_metadata_payload(
+        page_result: dict,
+        page_blob_path: str) -> ExtractionMetadataPayload:
+    header = page_result.get("header", {}) or {}
+    template_match = page_result.get("template_match", {}) or {}
+    return {
+        "page_blob_path": page_blob_path,
+        "page_number": page_result.get("page"),
+        "template_ok": _as_bool(page_result.get("template_ok")),
+        "template_match": template_match,
+        "catalog_used": template_match.get("catalog"),
+        "patient_name": (header.get("name") or "").strip() or None,
+        "dob": (header.get("dob") or "").strip() or None,
+        "flags": page_result.get("flags", []),
+    }
 
 
 def _looks_icd10(code: str) -> bool:
