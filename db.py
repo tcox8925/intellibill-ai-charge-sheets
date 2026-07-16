@@ -374,6 +374,12 @@ def persist_page_v2(document_id: int, page_result: dict, page_blob_path: str,
         clm_att_datetime = _current_cst_timestamp()
         with conn.cursor() as cur:
             cur.execute(
+                f"""DELETE FROM {ATTACHMENTS_TABLE}
+                     WHERE parent_attachment_id=%s
+                       AND clm_att_filename=%s""",
+                (document_id, page_file_name),
+            )
+            cur.execute(
                 f"""INSERT INTO {ATTACHMENTS_TABLE}
                         (type_id, clm_att_path, clm_att_filename,
                          clm_att_datetime, clm_login, created_at, updated_at,
