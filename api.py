@@ -26,8 +26,9 @@ Auth is the same KV/VNet story as pch-eob-pipeline (via run.make_client / db).
 
 import os
 import tempfile
+import logging
 from typing import Dict, List
-from typing import Optional
+from typing import Optional, Union
 
 from fastapi import FastAPI, BackgroundTasks, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -36,9 +37,12 @@ from pydantic import BaseModel, model_validator
 import auth
 import storage
 import db
+import image_ocr
 import run
 
 app = FastAPI(title="834 Charge-sheet OCR", version="1.0")
+
+logger = logging.getLogger("chargesheet.api")
 
 INGEST_ALL_EXCLUDE = [
     "Archive",
@@ -85,14 +89,25 @@ def _registry():
 
 class IngestRequest(BaseModel):
     # practice is GLOBAL (storage.PRACTICE) and render DPI is fixed — neither
-    # is part of the payload. The only input is an optional filename.
+    # is part of the payload. Callers may pass an exact filename at the
+    # practice root or a full blob path.
     filename: Optional[str] = None
+    blob_path: Optional[str] = None
 
 
 class IngestAllResult(BaseModel):
     queued: List[Dict[str, object]]
-    skipped: List[Dict[str, object]]
+    skipped: List["IngestSkipResult"]
     excluded_folders: List[str]
+
+
+class IngestSkipResult(BaseModel):
+    # Shared skip payload for direct ingest and ingest-all. Skip responses stay
+    # blob/folder scoped and do not include resolved practice metadata.
+    status: str = "skipped"
+    blob_path: Optional[str] = None
+    reason: str
+    folder: Optional[str] = None
 
 
 class FeedbackRequest(BaseModel):
@@ -178,13 +193,17 @@ def folders():
 
 
 @app.post("/chargesheet/ingest")
-def ingest(req: IngestRequest, bg: BackgroundTasks):
-    practice = storage.PRACTICE                       # global config
-    src = storage.find_source_pdf(req.filename)
-    if not src:
-        raise HTTPException(404, f"no PDF found under {practice}/"
-                                 + (f" matching {req.filename}" if req.filename else ""))
-    return _queue_blob_ingest(src, practice, bg)
+def ingest(req: IngestRequest, bg: BackgroundTasks) -> Union[Dict[str, object], IngestSkipResult]:
+    blob_path, practice = _resolve_ingest_target(req)
+    if is_processed(blob_path):
+        logger.info("Skipping already processed claim file: %s", blob_path)
+        return _build_skip_result(blob_path, "already_processed")
+
+    result = _handle_ingest_blob(blob_path, practice, bg)
+    if result is None:
+        return _build_skip_result(blob_path,
+                                  "unsupported_file_marked_processed")
+    return result
 
 
 @app.post("/chargesheet/ingest-all")
@@ -208,11 +227,17 @@ def ingest_all(bg: BackgroundTasks) -> IngestAllResult:
 
         for blob_path in claim_files:
             if is_processed(blob_path):
-                skipped.append({"folder": folder_name, "blob_path": blob_path,
-                                "reason": "already_processed"})
+                logger.info("Skipping already processed claim file: %s", blob_path)
+                skipped.append(_build_skip_result(
+                    blob_path, "already_processed", folder=folder_name))
                 continue
 
-            queue_result = _queue_blob_ingest(blob_path, folder_name, bg)
+            queue_result = _handle_ingest_blob(blob_path, folder_name, bg)
+            if queue_result is None:
+                skipped.append(_build_skip_result(
+                    blob_path,
+                    "unsupported_file_marked_processed", folder=folder_name))
+                continue
             queued.append(queue_result)
 
     return IngestAllResult(
@@ -223,17 +248,55 @@ def ingest_all(bg: BackgroundTasks) -> IngestAllResult:
 
 
 def is_processed(blob_path: str) -> bool:
-    """Placeholder for dedupe logic; currently processes every file once seen."""
-    return False
+    return db.is_attachment_processed(blob_path)
 
 
 def mark_completed(blob_path: str, document_id: int):
-    """Placeholder completion hook for future ingest-all tracking."""
-    return {"blob_path": blob_path, "document_id": document_id, "completed": True}
+    updated = db.mark_attachment_processed(blob_path, True)
+    return {"blob_path": blob_path, "document_id": document_id, "completed": updated}
+
+
+def _build_skip_result(blob_path: Optional[str], reason: str,
+                       folder: Optional[str] = None) -> IngestSkipResult:
+    return IngestSkipResult(
+        blob_path=blob_path,
+        reason=reason,
+        folder=folder,
+    )
+
+
+def _resolve_ingest_target(req: IngestRequest) -> tuple[str, str]:
+    if req.blob_path:
+        blob_path = req.blob_path.strip()
+        if not blob_path:
+            raise HTTPException(400, "blob_path cannot be blank")
+        practice = blob_path.split("/", 1)[0]
+        return blob_path, practice
+
+    practice = storage.PRACTICE
+    src = storage.find_source_pdf(req.filename)
+    if not src:
+        raise HTTPException(404, f"no PDF found under {practice}/"
+                                 + (f" matching {req.filename}" if req.filename else ""))
+    return src, practice
+
+
+def _mark_unsupported_processed(blob_path: str):
+    mark_completed(blob_path, None)
+    logger.info("Auto-marked unsupported claim file as processed: %s", blob_path)
+
+
+def _handle_ingest_blob(blob_path: str, practice: str,
+                        bg: BackgroundTasks) -> Optional[dict]:
+    if storage.is_pdf_path(blob_path) or storage.is_image_path(blob_path):
+        return _queue_blob_ingest(blob_path, practice, bg)
+
+    _mark_unsupported_processed(blob_path)
+    return None
 
 
 def _queue_blob_ingest(blob_path: str, practice: str, bg: BackgroundTasks) -> dict:
-    data = storage.download_pdf(blob_path)
+    data = storage.download_blob(blob_path)
     sha = db.sha256_bytes(data)
     stem = os.path.splitext(os.path.basename(blob_path))[0]
     practice_id, practice_name = db.resolve_practice(practice)
@@ -246,7 +309,10 @@ def _queue_blob_ingest(blob_path: str, practice: str, bg: BackgroundTasks) -> di
         file_sha256=sha,
     )
 
-    bg.add_task(_process, doc_id, practice, stem, blob_path, data)
+    worker = _process if storage.is_pdf_path(blob_path) else _process_image_blob
+    source_type = "pdf" if storage.is_pdf_path(blob_path) else "image"
+    logger.info("Queueing %s claim file for processing: %s", source_type, blob_path)
+    bg.add_task(worker, doc_id, practice, stem, blob_path, data)
     return {
         "document_id": doc_id,
         "status": "queued",
@@ -255,6 +321,7 @@ def _queue_blob_ingest(blob_path: str, practice: str, bg: BackgroundTasks) -> di
         "practice_matched": practice_id is not None,
         "source_blob_path": f"{storage.CONTAINER}/{blob_path}",
         "pages_blob_prefix": f"{storage.CONTAINER}/{storage.pages_prefix(stem, practice)}",
+        "source_type": source_type,
     }
 
 
@@ -285,6 +352,36 @@ def _process(document_id: int, practice: str, stem: str, blob_path: str, pdf_byt
                     for r in results if r.get("template_match", {}).get("template_id")), None)
         db.set_document_status(document_id, "done", page_count=len(results),
                                template_id=tid, run_metrics=metrics)
+        mark_completed(blob_path, document_id)
+    except Exception as e:
+        db.set_document_status(document_id, "failed", error=str(e))
+        raise
+
+
+def _process_image_blob(document_id: int, practice: str, stem: str,
+                        blob_path: str, image_bytes: bytes):
+    """Background worker for single image blobs."""
+    from PIL import Image
+
+    db.set_document_status(document_id, "processing")
+    registry = _registry()
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            image_path = os.path.join(tmp, os.path.basename(blob_path))
+            with open(image_path, "wb") as file_obj:
+                file_obj.write(image_bytes)
+
+            payload = image_ocr.process_image(image_path, _client(), registry)
+            normalized_path = image_ocr.normalize_image_to_png(image_path, tmp)
+            uploaded_blob_path = storage.upload_page(
+                stem, 1, Image.open(normalized_path), practice=practice)
+
+        result = payload["pages"][0]
+        db.persist_page(document_id, result,
+                        page_blob_path=f"{storage.CONTAINER}/{uploaded_blob_path}")
+        tid = result.get("template_match", {}).get("template_id")
+        db.set_document_status(document_id, "done", page_count=1,
+                               template_id=tid, run_metrics=payload["metrics"])
         mark_completed(blob_path, document_id)
     except Exception as e:
         db.set_document_status(document_id, "failed", error=str(e))

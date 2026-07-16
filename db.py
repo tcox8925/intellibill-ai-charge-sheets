@@ -17,6 +17,7 @@ from typing import Optional
 from auth import get_kv_client, get_pg_connection, reconnect_if_stale
 
 SCHEMA = "wpo"
+ATTACHMENTS_TABLE = '"EDI_Tebra".attachments'
 
 
 def _conn():
@@ -26,6 +27,49 @@ def _conn():
 
 def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def is_attachment_processed(clm_att_path: str, conn=None) -> bool:
+    """Return the processed flag for an attachment row keyed by clm_att_path."""
+    own = conn is None
+    conn = conn or _conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""SELECT COALESCE(processed, false)
+                      FROM {ATTACHMENTS_TABLE}
+                     WHERE clm_att_path=%s
+                     LIMIT 1""",
+                (clm_att_path,),
+            )
+            row = cur.fetchone()
+            return bool(row[0]) if row else False
+    finally:
+        if own:
+            conn.close()
+
+
+def mark_attachment_processed(clm_att_path: str, processed: bool = True,
+                              conn=None) -> bool:
+    """Update the processed flag for an attachment row keyed by clm_att_path."""
+    own = conn is None
+    conn = conn or _conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""UPDATE {ATTACHMENTS_TABLE}
+                       SET processed=%s,
+                           updated_at=now()
+                     WHERE clm_att_path=%s""",
+                (processed, clm_att_path),
+            )
+            updated = cur.rowcount > 0
+        if own:
+            conn.commit()
+        return updated
+    finally:
+        if own:
+            conn.close()
 
 
 # ---------- practice (global, from the Tebra EDI table) --------------------

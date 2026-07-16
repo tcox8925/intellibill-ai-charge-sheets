@@ -147,8 +147,22 @@ def find_source_pdf(filename: Optional[str] = None,
     return candidates[0][1]
 
 
-def download_pdf(blob_path: str) -> bytes:
+def download_blob(blob_path: str) -> bytes:
     return _container().download_blob(blob_path).readall()
+
+
+def download_pdf(blob_path: str) -> bytes:
+    return download_blob(blob_path)
+
+
+def is_pdf_path(blob_path: str) -> bool:
+    return blob_path.lower().endswith(".pdf")
+
+
+def is_image_path(blob_path: str) -> bool:
+    return os.path.splitext(blob_path)[1].lower() in {
+        ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp", ".gif"
+    }
 
 
 def pages_prefix(pdf_stem: str, practice: Optional[str] = None) -> str:
