@@ -72,6 +72,26 @@ def mark_attachment_processed(clm_att_path: str, processed: bool = True,
             conn.close()
 
 
+def list_attachment_entries(limit: int = 10, conn=None):
+    """Return the first attachment rows as dictionaries."""
+    own = conn is None
+    conn = conn or _conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""SELECT *
+                      FROM {ATTACHMENTS_TABLE}
+                     ORDER BY 1
+                     LIMIT %s""",
+                (limit,),
+            )
+            cols = [desc[0] for desc in cur.description]
+            return [dict(zip(cols, row)) for row in cur.fetchall()]
+    finally:
+        if own:
+            conn.close()
+
+
 # ---------- practice (global, from the Tebra EDI table) --------------------
 # The practice table is pre-existing and owned by the Tebra EDI feed. We only
 # READ it, matching storage.PRACTICE against prct_name.
