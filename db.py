@@ -92,6 +92,29 @@ def list_attachment_entries(limit: int = 10, conn=None):
             conn.close()
 
 
+def get_attachment_by_sha(file_sha256: str, conn=None) -> Optional[dict]:
+    """Return the first attachment row for the given SHA as a dictionary."""
+    own = conn is None
+    conn = conn or _conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""SELECT *
+                      FROM {ATTACHMENTS_TABLE}
+                     WHERE sha=%s
+                     LIMIT 1""",
+                (file_sha256,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            cols = [desc[0] for desc in cur.description]
+            return dict(zip(cols, row))
+    finally:
+        if own:
+            conn.close()
+
+
 # ---------- practice (global, from the Tebra EDI table) --------------------
 # The practice table is pre-existing and owned by the Tebra EDI feed. We only
 # READ it, matching storage.PRACTICE against prct_name.
@@ -135,6 +158,16 @@ def create_document(practice_id, practice_name: str, source_blob_path: str,
     own = conn is None
     conn = conn or _conn()
     try:
+        duplicate_attachment = get_attachment_by_sha(file_sha256, conn=conn)
+        if duplicate_attachment:
+            raise ValueError(
+                "another file with the same sha256 is present: "
+                f"id={duplicate_attachment.get('id')}, "
+                f"clm_att_filename={duplicate_attachment.get('clm_att_filename')}, "
+                f"clm_att_path={duplicate_attachment.get('clm_att_path')}, "
+                f"attachment_type={duplicate_attachment.get('attachment_type')}, "
+                f"sha={duplicate_attachment.get('sha')}"
+            )
         with conn.cursor() as cur:
             cur.execute(
                 f"""INSERT INTO {SCHEMA}.chargesheet_documents

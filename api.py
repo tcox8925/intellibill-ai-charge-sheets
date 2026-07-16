@@ -14,10 +14,10 @@ Endpoints
     GET  /chargesheet/documents/{document_id}/feedback list feedback
 
 Flow of POST /ingest (async):
-    find practice folder -> find newest .pdf -> download bytes -> register a
+    find source folder -> find newest .pdf -> download bytes -> register a
     document row (idempotent on sha256) -> BackgroundTask:
         split PDF -> per page: extract -> upload page-NN.png to
-        {practice}/pages/{stem}/ -> persist page+extractions+notes to Postgres
+        {source-folder}/pages/{stem}/ -> persist page+extractions+notes to Postgres
     status walks queued -> processing -> done|failed.
 
 Run:  uvicorn api:app --host 0.0.0.0 --port 8100
@@ -88,9 +88,8 @@ def _registry():
 # ---------- models ----------------------------------------------------------
 
 class IngestRequest(BaseModel):
-    # practice is GLOBAL (storage.PRACTICE) and render DPI is fixed — neither
-    # is part of the payload. Callers may pass an exact filename at the
-    # practice root or a full blob path.
+    # render DPI is fixed and callers may pass either an exact filename at the
+    # configured root or a full blob path.
     filename: Optional[str] = None
     blob_path: Optional[str] = None
 
@@ -194,12 +193,12 @@ def folders():
 
 @app.post("/chargesheet/ingest")
 def ingest(req: IngestRequest, bg: BackgroundTasks) -> Union[Dict[str, object], IngestSkipResult]:
-    blob_path, practice = _resolve_ingest_target(req)
+    blob_path = _resolve_ingest_target(req)
     if is_processed(blob_path):
         logger.info("Skipping already processed claim file: %s", blob_path)
         return _build_skip_result(blob_path, "already_processed")
 
-    result = _handle_ingest_blob(blob_path, practice, bg)
+    result = _handle_ingest_blob(blob_path, bg)
     if result is None:
         return _build_skip_result(blob_path,
                                   "unsupported_file_marked_processed")
@@ -232,7 +231,7 @@ def ingest_all(bg: BackgroundTasks) -> IngestAllResult:
                     blob_path, "already_processed", folder=folder_name))
                 continue
 
-            queue_result = _handle_ingest_blob(blob_path, folder_name, bg)
+            queue_result = _handle_ingest_blob(blob_path, bg)
             if queue_result is None:
                 skipped.append(_build_skip_result(
                     blob_path,
@@ -265,20 +264,20 @@ def _build_skip_result(blob_path: Optional[str], reason: str,
     )
 
 
-def _resolve_ingest_target(req: IngestRequest) -> tuple[str, str]:
+def _resolve_ingest_target(req: IngestRequest) -> str:
     if req.blob_path:
         blob_path = req.blob_path.strip()
         if not blob_path:
             raise HTTPException(400, "blob_path cannot be blank")
-        practice = blob_path.split("/", 1)[0]
-        return blob_path, practice
+        return blob_path
 
-    practice = storage.PRACTICE
     src = storage.find_source_pdf(req.filename)
     if not src:
-        raise HTTPException(404, f"no PDF found under {practice}/"
-                                 + (f" matching {req.filename}" if req.filename else ""))
-    return src, practice
+        detail = "no source PDF found"
+        if req.filename:
+            detail += f" matching {req.filename}"
+        raise HTTPException(404, detail)
+    return src
 
 
 def _mark_unsupported_processed(blob_path: str):
@@ -286,25 +285,28 @@ def _mark_unsupported_processed(blob_path: str):
     logger.info("Auto-marked unsupported claim file as processed: %s", blob_path)
 
 
-def _handle_ingest_blob(blob_path: str, practice: str,
-                        bg: BackgroundTasks) -> Optional[dict]:
+def _handle_ingest_blob(blob_path: str, bg: BackgroundTasks) -> Optional[dict]:
     if storage.is_pdf_path(blob_path) or storage.is_image_path(blob_path):
-        return _queue_blob_ingest(blob_path, practice, bg)
+        return _queue_blob_ingest(blob_path, bg)
 
     _mark_unsupported_processed(blob_path)
     return None
 
 
-def _queue_blob_ingest(blob_path: str, practice: str, bg: BackgroundTasks) -> dict:
+def _blob_folder(blob_path: str) -> str:
+    return blob_path.split("/", 1)[0]
+
+
+def _queue_blob_ingest(blob_path: str, bg: BackgroundTasks) -> dict:
     data = storage.download_blob(blob_path)
     sha = db.sha256_bytes(data)
     stem = os.path.splitext(os.path.basename(blob_path))[0]
-    practice_id, practice_name = db.resolve_practice(practice)
+    folder = _blob_folder(blob_path)
     doc_id = db.create_document(
-        practice_id=practice_id,
-        practice_name=practice_name,
+        practice_id=None,
+        practice_name=folder,
         source_blob_path=f"{storage.CONTAINER}/{blob_path}",
-        pages_blob_prefix=f"{storage.CONTAINER}/{storage.pages_prefix(stem, practice)}",
+        pages_blob_prefix=f"{storage.CONTAINER}/{storage.pages_prefix(stem, folder)}",
         file_name=os.path.basename(blob_path),
         file_sha256=sha,
     )
@@ -312,24 +314,23 @@ def _queue_blob_ingest(blob_path: str, practice: str, bg: BackgroundTasks) -> di
     worker = _process if storage.is_pdf_path(blob_path) else _process_image_blob
     source_type = "pdf" if storage.is_pdf_path(blob_path) else "image"
     logger.info("Queueing %s claim file for processing: %s", source_type, blob_path)
-    bg.add_task(worker, doc_id, practice, stem, blob_path, data)
+    bg.add_task(worker, doc_id, stem, blob_path, data)
     return {
         "document_id": doc_id,
         "status": "queued",
-        "practice": practice_name,
-        "practice_id": practice_id,
-        "practice_matched": practice_id is not None,
+        "folder": folder,
         "source_blob_path": f"{storage.CONTAINER}/{blob_path}",
-        "pages_blob_prefix": f"{storage.CONTAINER}/{storage.pages_prefix(stem, practice)}",
+        "pages_blob_prefix": f"{storage.CONTAINER}/{storage.pages_prefix(stem, folder)}",
         "source_type": source_type,
     }
 
 
-def _process(document_id: int, practice: str, stem: str, blob_path: str, pdf_bytes: bytes):
+def _process(document_id: int, stem: str, blob_path: str, pdf_bytes: bytes):
     """Background worker: split -> per-page extract -> upload page -> persist."""
     from PIL import Image
     db.set_document_status(document_id, "processing")
     registry = _registry()
+    folder = _blob_folder(blob_path)
     try:
         with tempfile.TemporaryDirectory() as tmp:
             pdf_path = os.path.join(tmp, "src.pdf")
@@ -339,7 +340,7 @@ def _process(document_id: int, practice: str, stem: str, blob_path: str, pdf_byt
             def on_page(page_no, page_image_path, result):
                 # upload the rendered page, then persist page+children with paths
                 blob_path = storage.upload_page(
-                    stem, page_no, Image.open(page_image_path), practice=practice)
+                    stem, page_no, Image.open(page_image_path), practice=folder)
                 result["template_match"] = result.get("template_match", {})
                 db.persist_page(document_id, result,
                                 page_blob_path=f"{storage.CONTAINER}/{blob_path}")
@@ -358,13 +359,14 @@ def _process(document_id: int, practice: str, stem: str, blob_path: str, pdf_byt
         raise
 
 
-def _process_image_blob(document_id: int, practice: str, stem: str,
-                        blob_path: str, image_bytes: bytes):
+def _process_image_blob(document_id: int, stem: str, blob_path: str,
+                        image_bytes: bytes):
     """Background worker for single image blobs."""
     from PIL import Image
 
     db.set_document_status(document_id, "processing")
     registry = _registry()
+    folder = _blob_folder(blob_path)
     try:
         with tempfile.TemporaryDirectory() as tmp:
             image_path = os.path.join(tmp, os.path.basename(blob_path))
@@ -374,7 +376,7 @@ def _process_image_blob(document_id: int, practice: str, stem: str,
             payload = image_ocr.process_image(image_path, _client(), registry)
             normalized_path = image_ocr.normalize_image_to_png(image_path, tmp)
             uploaded_blob_path = storage.upload_page(
-                stem, 1, Image.open(normalized_path), practice=practice)
+                stem, 1, Image.open(normalized_path), practice=folder)
 
         result = payload["pages"][0]
         db.persist_page(document_id, result,
