@@ -282,6 +282,7 @@ def _resolve_ingest_context(blob_path: str) -> dict:
 
     return {
         "attachment_id": attachment["id"],
+        "attachment_name": attachment.get("clm_att_filename"),
         "attachment_type": attachment.get("attachment_type"),
         "stem": os.path.splitext(os.path.basename(blob_path))[0],
         "folder": _blob_folder(blob_path),
@@ -297,6 +298,7 @@ def _run_blob_ingest_sync(blob_path: str, data: bytes, *, want=None) -> dict:
     worker = _process if context["source_type"] == "pdf" else _process_image_blob
     return worker(
         context["attachment_id"],
+        context["attachment_name"],
         context["attachment_type"],
         context["stem"],
         blob_path,
@@ -312,10 +314,11 @@ def _queue_blob_ingest(blob_path: str, bg: BackgroundTasks) -> dict:
     worker = _process if context["source_type"] == "pdf" else _process_image_blob
     logger.info("Queueing %s claim file for processing: %s",
                 context["source_type"], blob_path)
-    bg.add_task(worker, context["attachment_id"], context["attachment_type"],
-                context["stem"], blob_path, data)
+    bg.add_task(worker, context["attachment_id"], context["attachment_name"],
+                context["attachment_type"], context["stem"], blob_path, data)
     return {
         "document_id": context["attachment_id"],
+        "attachment_name": context["attachment_name"],
         "status": "queued",
         "folder": context["folder"],
         "source_blob_path": f"{storage.CONTAINER}/{blob_path}",
@@ -324,7 +327,8 @@ def _queue_blob_ingest(blob_path: str, bg: BackgroundTasks) -> dict:
     }
 
 
-def _process(attachment_id: int, attachment_type: str, stem: str,
+def _process(attachment_id: int, attachment_name: Optional[str],
+             attachment_type: str, stem: str,
              blob_path: str, pdf_bytes: bytes, want=None):
     """Background worker: split -> per-page extract -> upload page -> persist."""
     from PIL import Image
@@ -354,13 +358,15 @@ def _process(attachment_id: int, attachment_type: str, stem: str,
                     for r in results if r.get("template_match", {}).get("template_id")), None)
         _finalize_processed_blob(document_id, blob_path, len(results), tid, metrics)
         return _build_processed_response(
-            document_id, folder, blob_path, "pdf", results, metrics)
+            document_id, attachment_name, folder, blob_path, "pdf", results,
+            metrics)
     except Exception as e:
         _mark_processing_failed(document_id, e)
         raise
 
 
-def _process_image_blob(attachment_id: int, attachment_type: str, stem: str,
+def _process_image_blob(attachment_id: int, attachment_name: Optional[str],
+                        attachment_type: str, stem: str,
                         blob_path: str, image_bytes: bytes, want=None):
     """Background worker for single image blobs."""
     from PIL import Image
@@ -387,7 +393,7 @@ def _process_image_blob(attachment_id: int, attachment_type: str, stem: str,
         _finalize_processed_blob(document_id, blob_path, 1, tid,
                                  payload["metrics"])
         return _build_processed_response(
-            document_id, folder, blob_path, "image",
+            document_id, attachment_name, folder, blob_path, "image",
             payload["pages"], payload["metrics"])
     except Exception as e:
         _mark_processing_failed(document_id, e)
@@ -413,11 +419,12 @@ def _mark_processing_failed(document_id: int, error: Exception):
                        document_id, exc)
 
 
-def _build_processed_response(document_id: int, folder: str, blob_path: str,
-                              source_type: str, pages: list,
-                              metrics: dict) -> dict:
+def _build_processed_response(document_id: int, attachment_name: Optional[str],
+                              folder: str, blob_path: str, source_type: str,
+                              pages: list, metrics: dict) -> dict:
     return {
         "document_id": document_id,
+        "attachment_name": attachment_name,
         "status": "done",
         "folder": folder,
         "source_blob_path": f"{storage.CONTAINER}/{blob_path}",
