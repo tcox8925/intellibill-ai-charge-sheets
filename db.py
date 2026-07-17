@@ -80,19 +80,46 @@ def is_attachment_processed(clm_att_path: str, conn=None) -> bool:
             conn.close()
 
 
-def mark_attachment_processed(clm_att_path: str, processed: bool = True,
-                              conn=None) -> bool:
-    """Update the processed flag for an attachment row keyed by clm_att_path."""
+def update_attachment(clm_att_path: str, *, new_blob_path: Optional[str] = None,
+                      status: Optional[str] = None,
+                      processed: Optional[bool] = None,
+                      raw_extracted_data: Optional[Any] = None,
+                      conn=None) -> bool:
+    """Update selected attachment fields for the row identified by clm_att_path."""
+    assignments = []
+    params = []
+
+    if new_blob_path is not None:
+        assignments.extend([
+            "clm_att_path=%s",
+            "clm_att_filename=%s",
+        ])
+        params.extend([new_blob_path, os.path.basename(new_blob_path)])
+    if status is not None:
+        assignments.append("status=%s")
+        params.append(status)
+    if processed is not None:
+        assignments.append("processed=%s")
+        params.append(processed)
+    if raw_extracted_data is not None:
+        assignments.append("raw_extracted_data=%s::jsonb")
+        params.append(json.dumps(raw_extracted_data))
+
+    if not assignments:
+        return False
+
     own = conn is None
     conn = conn or _conn()
     try:
+        updated_at = _current_cst_timestamp()
         with conn.cursor() as cur:
+            params.extend([updated_at, clm_att_path])
             cur.execute(
                 f"""UPDATE {ATTACHMENTS_TABLE}
-                       SET processed=%s,
-                           updated_at=now()
+                       SET {', '.join(assignments)},
+                           updated_at=%s
                      WHERE clm_att_path=%s""",
-                (processed, clm_att_path),
+                params,
             )
             updated = cur.rowcount > 0
         if own:
@@ -371,7 +398,9 @@ def persist_page_v2(document_id: int, page_result: dict, page_blob_path: str,
         metadata_payload = _build_extraction_metadata_payload(
             page_result, page_blob_path)
         page_file_name = os.path.basename(page_blob_path)
-        clm_att_datetime = _current_cst_timestamp()
+        att_datetime = _current_cst_timestamp()
+        created_at = att_datetime
+        updated_at = att_datetime
         with conn.cursor() as cur:
             cur.execute(
                 f"""DELETE FROM {ATTACHMENTS_TABLE}
@@ -387,15 +416,17 @@ def persist_page_v2(document_id: int, page_result: dict, page_blob_path: str,
                          assigned_to_id, status, raw_extracted_data,
                          processed_extracted_data, extraction_metadata,
                          processed, sha)
-                    VALUES (%s, %s, %s, %s, %s, now(), now(), %s, %s, %s, %s,
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                             %s, %s::jsonb, %s::jsonb, %s::jsonb, %s, %s)
                     RETURNING id""",
                 (
                     None,
                     page_blob_path,
                     page_file_name,
-                    clm_att_datetime,
+                    att_datetime,
                     ATTACHMENT_CLM_LOGIN,
+                    created_at,
+                    updated_at,
                     attachment_type,
                     document_id,
                     ATTACHMENT_USER_ID,
@@ -656,8 +687,10 @@ def _as_bool(v):
     return None
 
 
-def _current_cst_timestamp() -> datetime:
-    return datetime.now(ZoneInfo("America/Chicago"))
+def _current_cst_timestamp() -> str:
+    return datetime.now(ZoneInfo("America/Chicago")).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
 
 
 def _build_processed_payload(page_result: dict) -> ProcessedExtractionPayload:

@@ -151,6 +151,18 @@ def download_blob(blob_path: str) -> bytes:
     return _container().download_blob(blob_path).readall()
 
 
+def move_blob(blob_path: str, target_blob_path: str) -> str:
+    """Move a blob within the configured container and return the new path."""
+    if blob_path == target_blob_path:
+        return target_blob_path
+
+    container = _container()
+    data = container.download_blob(blob_path).readall()
+    container.upload_blob(name=target_blob_path, data=data, overwrite=True)
+    container.delete_blob(blob_path)
+    return target_blob_path
+
+
 def download_pdf(blob_path: str) -> bytes:
     return download_blob(blob_path)
 

@@ -27,6 +27,7 @@ Auth is the same KV/VNet story as pch-eob-pipeline (via run.make_client / db).
 import os
 import tempfile
 import logging
+from datetime import date
 from typing import Dict, List
 from typing import Optional, Union
 
@@ -221,9 +222,72 @@ def is_processed(blob_path: str) -> bool:
     return db.is_attachment_processed(blob_path)
 
 
-def mark_completed(blob_path: str, document_id: int):
-    updated = db.mark_attachment_processed(blob_path, True)
-    return {"blob_path": blob_path, "document_id": document_id, "completed": updated}
+def construct_archive_folder_path(blob_path: str) -> str:
+    path_parts = [part for part in blob_path.strip("/").split("/") if part]
+    entity_group = path_parts[0]
+    current_date = date.today().isoformat()
+    return f"Archive/{entity_group}/Claims/{current_date}"
+
+
+def _archive_blob_path(blob_path: str, archive_folder_path: str, *,
+                       status: Optional[str] = None,
+                       processed: Optional[bool] = True,
+                       raw_extracted_data=None) -> dict:
+    attachment = db.get_attachment_by_path(blob_path)
+    if not attachment:
+        raise HTTPException(404, f"attachment not found for blob path: {blob_path}")
+
+    target_blob_path = f"{archive_folder_path.strip().strip('/')}/{os.path.basename(blob_path)}"
+    updated = db.update_attachment(
+        blob_path,
+        new_blob_path=target_blob_path,
+        status=status,
+        processed=processed,
+        raw_extracted_data=raw_extracted_data,
+    )
+    if not updated:
+        raise HTTPException(500, "attachment path update failed")
+
+    try:
+        storage.move_blob(blob_path, target_blob_path)
+    except Exception as exc:
+        rollback_updated = db.update_attachment(
+            target_blob_path,
+            new_blob_path=blob_path,
+            status=attachment.get("status"),
+            processed=attachment.get("processed"),
+            raw_extracted_data=attachment.get("raw_extracted_data"),
+        )
+        if not rollback_updated:
+            raise HTTPException(
+                500,
+                "blob move failed after attachment update and rollback failed",
+            ) from exc
+        raise HTTPException(
+            500,
+            "blob move failed after attachment update; database changes were rolled back",
+        ) from exc
+
+    return {
+        "status": "archived",
+        "old_blob_path": blob_path,
+        "new_blob_path": target_blob_path,
+        "attachment_id": attachment["id"],
+        "attachment_name": os.path.basename(target_blob_path),
+        "attachment_status": status,
+        "processed": processed,
+    }
+
+
+def archive_completed(blob_path: str, document_id: int, results):
+    result = _archive_blob_path(
+        blob_path,
+        construct_archive_folder_path(blob_path),
+        status="C",
+        raw_extracted_data=results,
+    )
+    result["document_id"] = document_id
+    return result
 
 
 def _build_skip_result(blob_path: Optional[str], reason: str,
@@ -252,8 +316,9 @@ def _resolve_ingest_target(req: IngestRequest) -> str:
 
 
 def _mark_unsupported_processed(blob_path: str):
-    mark_completed(blob_path, None)
-    logger.info("Auto-marked unsupported claim file as processed: %s", blob_path)
+    db.update_attachment(blob_path, processed=True)
+    logger.info("Auto-marked unsupported claim file as processed: %s",
+                blob_path)
 
 
 def _handle_ingest_blob(blob_path: str, bg: BackgroundTasks) -> Optional[dict]:
@@ -356,7 +421,8 @@ def _process(attachment_id: int, attachment_name: Optional[str],
 
         tid = next((r.get("template_match", {}).get("template_id")
                     for r in results if r.get("template_match", {}).get("template_id")), None)
-        _finalize_processed_blob(document_id, blob_path, len(results), tid, metrics)
+        _finalize_processed_blob(
+            document_id, blob_path, len(results), tid, metrics, results)
         return _build_processed_response(
             document_id, attachment_name, folder, blob_path, "pdf", results,
             metrics)
@@ -390,8 +456,9 @@ def _process_image_blob(attachment_id: int, attachment_name: Optional[str],
                            page_blob_path=uploaded_blob_path,
                            attachment_type=attachment_type)
         tid = result.get("template_match", {}).get("template_id")
-        _finalize_processed_blob(document_id, blob_path, 1, tid,
-                                 payload["metrics"])
+        _finalize_processed_blob(
+            document_id, blob_path, 1, tid, payload["metrics"],
+            payload["pages"])
         return _build_processed_response(
             document_id, attachment_name, folder, blob_path, "image",
             payload["pages"], payload["metrics"])
@@ -401,14 +468,15 @@ def _process_image_blob(attachment_id: int, attachment_name: Optional[str],
 
 
 def _finalize_processed_blob(document_id: int, blob_path: str, page_count: int,
-                             template_id: Optional[str], run_metrics: dict):
+                             template_id: Optional[str], run_metrics: dict,
+                             results):
     try:
         db.set_document_status(document_id, "done", page_count=page_count,
                                template_id=template_id, run_metrics=run_metrics)
     except Exception as exc:
         logger.warning("Skipping legacy document status update for %s: %s",
                        document_id, exc)
-    mark_completed(blob_path, document_id)
+    archive_completed(blob_path, document_id, results)
 
 
 def _mark_processing_failed(document_id: int, error: Exception):
