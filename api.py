@@ -5,9 +5,11 @@ storage (storage.py) and Postgres (db.py).
 
 Endpoints
     GET  /health                                      simple service health check
+    GET  /health/listattachments                      list the first 10 attachment rows
     POST /chargesheet/extract                         process one blob path synchronously
     GET  /chargesheet/folders                         list container folders
     POST /chargesheet/ingest                          {filename?} -> document_id
+    POST /chargesheet/ingest-all                      queue all supported claim files
     GET  /chargesheet/documents/{document_id}         status + metrics
     GET  /chargesheet/documents/{document_id}/pages   per-page results + extraction_ids
     POST /chargesheet/feedback                         the two review signals
@@ -151,6 +153,11 @@ def health():
         "database": db_status,
         "storage": storage_status,
     }
+
+
+@app.get("/health/listattachments")
+def health_listattachments():
+    return {"attachments": db.list_attachment_entries()}
 
 
 @app.post("/chargesheet/extract")
