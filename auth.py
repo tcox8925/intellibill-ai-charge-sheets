@@ -33,7 +33,6 @@ EMBEDDING_ENDPOINT = os.environ.get(
     "EMBEDDING_ENDPOINT",
     "https://sql-test-resource.cognitiveservices.azure.com/",
 )
-EMBEDDING_DEPLOYMENT = os.environ.get("EMBEDDING_DEPLOYMENT", "text-embedding-3-small")
 EMBEDDING_API_VERSION = os.environ.get("EMBEDDING_API_VERSION", "2024-12-01-preview")
 
 # Postgres

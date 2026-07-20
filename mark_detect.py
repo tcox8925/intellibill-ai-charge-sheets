@@ -24,7 +24,7 @@ import cv2
 from scipy import ndimage
 from PIL import Image
 
-from run import split_pdf
+from run import split_pdf_v2
 
 W, H = 2122, 1649          # common upright frame
 INK_THRESH = 55            # residual darkness that counts as ink
@@ -147,7 +147,7 @@ def main():
     ap.add_argument("--overlay", type=int, default=0, help="1-based page to overlay")
     ap.add_argument("--dpi", type=int, default=200)
     args = ap.parse_args()
-    pages = split_pdf(args.pdf, "pages", args.dpi)
+    pages = split_pdf_v2(args.pdf, "pages", args.dpi)
     template, aligned = build_template(pages)
     Image.fromarray(template.astype(np.uint8)).save("template.png")
     summary = []

@@ -63,6 +63,24 @@ def split_pdf(pdf: str, out_dir: str, dpi: int) -> list:
     return sorted(glob.glob(os.path.join(out_dir, "page-*.png")))
 
 
+def split_pdf_v2(pdf: str, out_dir: str, dpi: int) -> list:
+    import fitz
+
+    os.makedirs(out_dir, exist_ok=True)
+    pages = []
+    zoom = dpi / 72.0
+    matrix = fitz.Matrix(zoom, zoom)
+
+    with fitz.open(pdf) as doc:
+        for index, page in enumerate(doc, start=1):
+            out_path = os.path.join(out_dir, f"page-{index:02d}.png")
+            pixmap = page.get_pixmap(matrix=matrix, alpha=False)
+            pixmap.save(out_path)
+            pages.append(out_path)
+
+    return pages
+
+
 def make_client():
     """Opus client, wired to EOB v9 auth (KV -> Foundry), else env credentials."""
     here = os.path.dirname(os.path.abspath(__file__))
@@ -100,7 +118,7 @@ def process_pdf(pdf_path: str, client, registry, *, pages_dir: str = "pages",
     Render DPI is fixed (RENDER_DPI).
     """
     import numpy as np
-    pages = split_pdf(pdf_path, pages_dir, RENDER_DPI)
+    pages = split_pdf_v2(pdf_path, pages_dir, RENDER_DPI)
 
     # Build the ink-isolation template once (median of aligned pages). The
     # cleaned per-page ink image is sent to the extractor as mark evidence so

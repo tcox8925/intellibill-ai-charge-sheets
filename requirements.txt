@@ -24,6 +24,7 @@ psycopg2-binary
 
 # PDF splitting helper
 pypdf
+pymupdf
 
 # Environment loading
 python-dotenv
