@@ -63,6 +63,7 @@ def split_pdf(pdf: str, out_dir: str, dpi: int) -> list:
     return sorted(glob.glob(os.path.join(out_dir, "page-*.png")))
 
 
+
 def split_pdf_v2(pdf: str, out_dir: str, dpi: int) -> list:
     import fitz
 
