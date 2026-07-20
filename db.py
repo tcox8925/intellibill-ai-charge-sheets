@@ -24,7 +24,6 @@ EDI_TEBRA_SCHEMA = '"EDI_Tebra"'
 ATTACHMENTS_TABLE = f"{EDI_TEBRA_SCHEMA}.attachments"
 ATTACHMENT_CLM_LOGIN = os.environ["ATTACHMENT_CLM_LOGIN"]
 ATTACHMENT_USER_ID = os.environ["ATTACHMENT_USER_ID"]
-ATTACHMENT_ASSIGNED_TO_ID = os.environ.get("ATTACHMENT_ASSIGNED_TO_ID") or None
 ATTACHMENT_STATUS = "G"
 
 
@@ -412,12 +411,12 @@ def persist_page_v2(document_id: int, page_result: dict, page_blob_path: str,
                 f"""INSERT INTO {ATTACHMENTS_TABLE}
                         (type_id, clm_att_path, clm_att_filename,
                          clm_att_datetime, clm_login, created_at, updated_at,
-                         attachment_type, parent_attachment_id, user_id,
-                         assigned_to_id, status, raw_extracted_data,
+                     attachment_type, parent_attachment_id, user_id,
+                     status, raw_extracted_data,
                          processed_extracted_data, extraction_metadata,
                          processed, sha)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                            %s, %s::jsonb, %s::jsonb, %s::jsonb, %s, %s)
+                        %s::jsonb, %s::jsonb, %s::jsonb, %s, %s)
                     RETURNING id""",
                 (
                     None,
@@ -430,7 +429,6 @@ def persist_page_v2(document_id: int, page_result: dict, page_blob_path: str,
                     attachment_type,
                     document_id,
                     ATTACHMENT_USER_ID,
-                    ATTACHMENT_ASSIGNED_TO_ID,
                     ATTACHMENT_STATUS,
                     json.dumps(page_result),
                     json.dumps(processed_payload),
