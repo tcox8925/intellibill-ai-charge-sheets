@@ -11,6 +11,7 @@ scipy
 # API layer
 fastapi
 pydantic
+gunicorn
 uvicorn
 python-multipart
 
