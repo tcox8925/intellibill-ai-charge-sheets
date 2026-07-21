@@ -398,6 +398,7 @@ def persist_page_v2(document_id: int, attachment_name: Optional[str],
         metadata_payload = _build_extraction_metadata_payload(
             page_result, page_blob_path)
         page_file_name = os.path.basename(page_blob_path)
+        original_file_name = page_file_name.rsplit("_", 1)[-1]
         att_datetime = _current_cst_timestamp()
         created_at = att_datetime
         updated_at = att_datetime
@@ -413,10 +414,11 @@ def persist_page_v2(document_id: int, attachment_name: Optional[str],
                         (type_id, clm_att_path, clm_att_filename,
                          clm_att_datetime, clm_login, created_at, updated_at,
                          attachment_type, parent_attachment_id,
-                         parent_attachment_name, user_id, status,
+                         parent_attachment_name, original_file_name,
+                         user_id, status,
                          raw_extracted_data, processed_extracted_data,
-                     extraction_metadata, processed, sha)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                         extraction_metadata, processed, sha)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                         %s::jsonb, %s::jsonb, %s::jsonb, %s, %s)
                     RETURNING id""",
                 (
@@ -430,6 +432,7 @@ def persist_page_v2(document_id: int, attachment_name: Optional[str],
                     attachment_type,
                     document_id,
                     attachment_name,
+                    original_file_name,
                     ATTACHMENT_USER_ID,
                     ATTACHMENT_STATUS,
                     json.dumps(page_result),
