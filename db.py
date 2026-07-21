@@ -387,7 +387,8 @@ def persist_page(document_id: int, page_result: dict, page_blob_path: str,
             conn.close()
 
 
-def persist_page_v2(document_id: int, page_result: dict, page_blob_path: str,
+def persist_page_v2(document_id: int, attachment_name: Optional[str],
+                    page_result: dict, page_blob_path: str,
                     attachment_type: str, conn=None) -> int:
     """Insert one extracted page as a child attachment row."""
     own = conn is None
@@ -411,10 +412,10 @@ def persist_page_v2(document_id: int, page_result: dict, page_blob_path: str,
                 f"""INSERT INTO {ATTACHMENTS_TABLE}
                         (type_id, clm_att_path, clm_att_filename,
                          clm_att_datetime, clm_login, created_at, updated_at,
-                     attachment_type, parent_attachment_id, user_id,
-                     status, raw_extracted_data,
-                         processed_extracted_data, extraction_metadata,
-                         processed, sha)
+                         attachment_type, parent_attachment_id,
+                         parent_attachment_name, user_id, status,
+                         raw_extracted_data, processed_extracted_data,
+                     extraction_metadata, processed, sha)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                         %s::jsonb, %s::jsonb, %s::jsonb, %s, %s)
                     RETURNING id""",
@@ -428,6 +429,7 @@ def persist_page_v2(document_id: int, page_result: dict, page_blob_path: str,
                     updated_at,
                     attachment_type,
                     document_id,
+                    attachment_name,
                     ATTACHMENT_USER_ID,
                     ATTACHMENT_STATUS,
                     json.dumps(page_result),

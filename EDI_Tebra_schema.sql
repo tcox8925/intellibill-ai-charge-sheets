@@ -8,15 +8,18 @@ CREATE TABLE "EDI_Tebra".attachments (
     created_at timestamp NOT NULL,
     updated_at timestamp NOT NULL,
     attachment_type varchar(50) DEFAULT 'claim'::character varying NULL,
-    parent_attachment_id int4 NULL,
     user_id uuid NULL,
     assigned_to_id uuid NULL,
     status varchar(5) DEFAULT 'G'::character varying NOT NULL,
     raw_extracted_data jsonb NULL,
     processed_extracted_data jsonb NULL,
-    extraction_metadata jsonb NULL,
     processed bool DEFAULT false NOT NULL,
     sha varchar(64) NULL,
+    extraction_metadata jsonb NULL,
+    parent_attachment_id int4 NULL,
+    parent_attachment_name text NULL,
+    original_file_name text NULL,
     CONSTRAINT claim_attachments_pkey PRIMARY KEY (id),
-    CONSTRAINT attachments_assigned_to_id_fkey FOREIGN KEY (assigned_to_id) REFERENCES rcm.users(id)
+    CONSTRAINT attachments_assigned_to_id_fkey FOREIGN KEY (assigned_to_id) REFERENCES rcm.users(id),
+    CONSTRAINT attachments_parent_attachment_id_attachments_id_fk FOREIGN KEY (parent_attachment_id) REFERENCES "EDI_Tebra".attachments(id)
 );

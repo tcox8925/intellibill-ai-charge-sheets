@@ -419,7 +419,7 @@ def _process(attachment_id: int, attachment_name: Optional[str],
                 uploaded_blob_path = storage.upload_page(
                     blob_path, page_no, Image.open(page_image_path))
                 result["template_match"] = result.get("template_match", {})
-                db.persist_page_v2(document_id, result,
+                db.persist_page_v2(document_id, attachment_name, result,
                                    page_blob_path=uploaded_blob_path,
                                    attachment_type=attachment_type)
 
@@ -460,7 +460,7 @@ def _process_image_blob(attachment_id: int, attachment_name: Optional[str],
                 blob_path, 1, Image.open(normalized_path))
 
         result = payload["pages"][0]
-        db.persist_page_v2(document_id, result,
+        db.persist_page_v2(document_id, attachment_name, result,
                            page_blob_path=uploaded_blob_path,
                            attachment_type=attachment_type)
         tid = result.get("template_match", {}).get("template_id")
