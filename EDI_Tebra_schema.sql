@@ -19,7 +19,13 @@ CREATE TABLE "EDI_Tebra".attachments (
     parent_attachment_id int4 NULL,
     parent_attachment_name text NULL,
     original_file_name text NULL,
+    client_id int4 NULL,
+    group_id int4 NULL,
+    practice_id int4 NULL,
     CONSTRAINT claim_attachments_pkey PRIMARY KEY (id),
     CONSTRAINT attachments_assigned_to_id_fkey FOREIGN KEY (assigned_to_id) REFERENCES rcm.users(id),
-    CONSTRAINT attachments_parent_attachment_id_attachments_id_fk FOREIGN KEY (parent_attachment_id) REFERENCES "EDI_Tebra".attachments(id)
+    CONSTRAINT attachments_client_id_fkey FOREIGN KEY (client_id) REFERENCES "EDI_Tebra".client(client_id) ON DELETE CASCADE,
+    CONSTRAINT attachments_group_id_fkey FOREIGN KEY (group_id) REFERENCES "EDI_Tebra"."group"(id) ON DELETE CASCADE,
+    CONSTRAINT attachments_parent_attachment_id_attachments_id_fk FOREIGN KEY (parent_attachment_id) REFERENCES "EDI_Tebra".attachments(id),
+    CONSTRAINT attachments_practice_id_fkey FOREIGN KEY (practice_id) REFERENCES "EDI_Tebra".practice(id) ON DELETE CASCADE
 );

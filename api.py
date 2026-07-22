@@ -371,8 +371,6 @@ def _run_blob_ingest_sync(blob_path: str, data: bytes, *, want=None) -> dict:
     worker = _process if context["source_type"] == "pdf" else _process_image_blob
     return worker(
         context["attachment_id"],
-        context["attachment_name"],
-        context["attachment_type"],
         context["stem"],
         blob_path,
         data,
@@ -387,8 +385,7 @@ def _queue_blob_ingest(blob_path: str, bg: BackgroundTasks) -> dict:
     worker = _process if context["source_type"] == "pdf" else _process_image_blob
     logger.info("Queueing %s claim file for processing: %s",
                 context["source_type"], blob_path)
-    bg.add_task(worker, context["attachment_id"], context["attachment_name"],
-                context["attachment_type"], context["stem"], blob_path, data)
+    bg.add_task(worker, context["attachment_id"], context["stem"], blob_path, data)
     return {
         "document_id": context["attachment_id"],
         "attachment_name": context["attachment_name"],
@@ -400,8 +397,7 @@ def _queue_blob_ingest(blob_path: str, bg: BackgroundTasks) -> dict:
     }
 
 
-def _process(attachment_id: int, attachment_name: Optional[str],
-             attachment_type: str, stem: str,
+def _process(attachment_id: int, stem: str,
              blob_path: str, pdf_bytes: bytes, want=None):
     """Background worker: split -> per-page extract -> upload page -> persist."""
     from PIL import Image
@@ -409,6 +405,10 @@ def _process(attachment_id: int, attachment_name: Optional[str],
     folder = _blob_folder(blob_path)
     document_id = attachment_id
     try:
+        parent_attachment = db.get_attachment_by_id(document_id)
+        if not parent_attachment:
+            raise HTTPException(404, f"attachment not found: id={document_id}")
+        attachment_name = parent_attachment.get("clm_att_filename")
         with tempfile.TemporaryDirectory() as tmp:
             pdf_path = os.path.join(tmp, "src.pdf")
             with open(pdf_path, "wb") as f:
@@ -419,9 +419,8 @@ def _process(attachment_id: int, attachment_name: Optional[str],
                 uploaded_blob_path = storage.upload_page(
                     blob_path, page_no, Image.open(page_image_path))
                 result["template_match"] = result.get("template_match", {})
-                db.persist_page_v2(document_id, attachment_name, result,
-                                   page_blob_path=uploaded_blob_path,
-                                   attachment_type=attachment_type)
+                db.persist_page_v2(document_id, result,
+                                   page_blob_path=uploaded_blob_path)
 
             results, metrics = run.process_pdf(
                 pdf_path, _client(), registry,
@@ -439,8 +438,7 @@ def _process(attachment_id: int, attachment_name: Optional[str],
         raise
 
 
-def _process_image_blob(attachment_id: int, attachment_name: Optional[str],
-                        attachment_type: str, stem: str,
+def _process_image_blob(attachment_id: int, stem: str,
                         blob_path: str, image_bytes: bytes, want=None):
     """Background worker for single image blobs."""
     from PIL import Image
@@ -449,6 +447,10 @@ def _process_image_blob(attachment_id: int, attachment_name: Optional[str],
     folder = _blob_folder(blob_path)
     document_id = attachment_id
     try:
+        parent_attachment = db.get_attachment_by_id(document_id)
+        if not parent_attachment:
+            raise HTTPException(404, f"attachment not found: id={document_id}")
+        attachment_name = parent_attachment.get("clm_att_filename")
         with tempfile.TemporaryDirectory() as tmp:
             image_path = os.path.join(tmp, os.path.basename(blob_path))
             with open(image_path, "wb") as file_obj:
@@ -460,9 +462,8 @@ def _process_image_blob(attachment_id: int, attachment_name: Optional[str],
                 blob_path, 1, Image.open(normalized_path))
 
         result = payload["pages"][0]
-        db.persist_page_v2(document_id, attachment_name, result,
-                           page_blob_path=uploaded_blob_path,
-                           attachment_type=attachment_type)
+        db.persist_page_v2(document_id, result,
+                           page_blob_path=uploaded_blob_path)
         tid = result.get("template_match", {}).get("template_id")
         _finalize_processed_blob(
             document_id, blob_path, 1, tid, payload["metrics"],

@@ -172,6 +172,29 @@ def get_attachment_by_path(clm_att_path: str, conn=None) -> Optional[dict]:
             conn.close()
 
 
+def get_attachment_by_id(attachment_id: int, conn=None) -> Optional[dict]:
+    """Return the attachment row for the given id."""
+    own = conn is None
+    conn = conn or _conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""SELECT *
+                      FROM {ATTACHMENTS_TABLE}
+                     WHERE id=%s
+                     LIMIT 1""",
+                (attachment_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            cols = [desc[0] for desc in cur.description]
+            return dict(zip(cols, row))
+    finally:
+        if own:
+            conn.close()
+
+
 def get_attachment_by_sha(file_sha256: str, conn=None) -> Optional[dict]:
     """Return the first attachment row for the given SHA as a dictionary."""
     own = conn is None
@@ -387,13 +410,15 @@ def persist_page(document_id: int, page_result: dict, page_blob_path: str,
             conn.close()
 
 
-def persist_page_v2(document_id: int, attachment_name: Optional[str],
-                    page_result: dict, page_blob_path: str,
-                    attachment_type: str, conn=None) -> int:
+def persist_page_v2(document_id: int, page_result: dict, page_blob_path: str,
+                    conn=None) -> int:
     """Insert one extracted page as a child attachment row."""
     own = conn is None
     conn = conn or _conn()
     try:
+        parent_attachment = get_attachment_by_id(document_id, conn=conn)
+        if not parent_attachment:
+            raise ValueError(f"parent attachment not found: id={document_id}")
         processed_payload = _build_processed_payload(page_result)
         metadata_payload = _build_extraction_metadata_payload(
             page_result, page_blob_path)
@@ -415,11 +440,12 @@ def persist_page_v2(document_id: int, attachment_name: Optional[str],
                          clm_att_datetime, clm_login, created_at, updated_at,
                          attachment_type, parent_attachment_id,
                          parent_attachment_name, original_file_name,
+                         client_id, group_id, practice_id,
                          user_id, status,
                          raw_extracted_data, processed_extracted_data,
                          extraction_metadata, processed, sha)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                        %s::jsonb, %s::jsonb, %s::jsonb, %s, %s)
+                        %s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s, %s)
                     RETURNING id""",
                 (
                     None,
@@ -429,10 +455,13 @@ def persist_page_v2(document_id: int, attachment_name: Optional[str],
                     ATTACHMENT_CLM_LOGIN,
                     created_at,
                     updated_at,
-                    attachment_type,
+                    parent_attachment.get("attachment_type"),
                     document_id,
-                    attachment_name,
+                    parent_attachment.get("clm_att_filename"),
                     original_file_name,
+                    parent_attachment.get("client_id"),
+                    parent_attachment.get("group_id"),
+                    parent_attachment.get("practice_id"),
                     ATTACHMENT_USER_ID,
                     ATTACHMENT_STATUS,
                     json.dumps(page_result),
