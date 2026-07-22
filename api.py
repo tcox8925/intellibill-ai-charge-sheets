@@ -240,7 +240,9 @@ def construct_archive_folder_path(blob_path: str) -> str:
 def _archive_blob_path(blob_path: str, archive_folder_path: str, *,
                        status: Optional[str] = None,
                        processed: Optional[bool] = True,
-                       raw_extracted_data=None) -> dict:
+                       raw_extracted_data=None,
+                       page_count: Optional[int] = None,
+                       extracted_files_count: Optional[int] = None) -> dict:
     attachment = db.get_attachment_by_path(blob_path)
     if not attachment:
         raise HTTPException(404, f"attachment not found for blob path: {blob_path}")
@@ -252,6 +254,8 @@ def _archive_blob_path(blob_path: str, archive_folder_path: str, *,
         status=status,
         processed=processed,
         raw_extracted_data=raw_extracted_data,
+        page_count=page_count,
+        extracted_files_count=extracted_files_count,
     )
     if not updated:
         raise HTTPException(500, "attachment path update failed")
@@ -265,6 +269,8 @@ def _archive_blob_path(blob_path: str, archive_folder_path: str, *,
             status=attachment.get("status"),
             processed=attachment.get("processed"),
             raw_extracted_data=attachment.get("raw_extracted_data"),
+            page_count=attachment.get("page_count"),
+            extracted_files_count=attachment.get("extracted_files_count"),
         )
         if not rollback_updated:
             raise HTTPException(
@@ -284,15 +290,20 @@ def _archive_blob_path(blob_path: str, archive_folder_path: str, *,
         "attachment_name": os.path.basename(target_blob_path),
         "attachment_status": status,
         "processed": processed,
+        "page_count": page_count,
+        "extracted_files_count": extracted_files_count,
     }
 
 
-def archive_completed(blob_path: str, document_id: int, results):
+def archive_completed(blob_path: str, document_id: int, results,
+                      page_count: int):
     result = _archive_blob_path(
         blob_path,
         construct_archive_folder_path(blob_path),
         status="C",
         raw_extracted_data=results,
+        page_count=page_count,
+        extracted_files_count=page_count,
     )
     result["document_id"] = document_id
     return result
@@ -485,7 +496,7 @@ def _finalize_processed_blob(document_id: int, blob_path: str, page_count: int,
     except Exception as exc:
         logger.warning("Skipping legacy document status update for %s: %s",
                        document_id, exc)
-    archive_completed(blob_path, document_id, results)
+    archive_completed(blob_path, document_id, results, page_count)
 
 
 def _mark_processing_failed(document_id: int, error: Exception):

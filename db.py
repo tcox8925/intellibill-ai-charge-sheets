@@ -83,6 +83,8 @@ def update_attachment(clm_att_path: str, *, new_blob_path: Optional[str] = None,
                       status: Optional[str] = None,
                       processed: Optional[bool] = None,
                       raw_extracted_data: Optional[Any] = None,
+                      page_count: Optional[int] = None,
+                      extracted_files_count: Optional[int] = None,
                       conn=None) -> bool:
     """Update selected attachment fields for the row identified by clm_att_path."""
     assignments = []
@@ -103,6 +105,12 @@ def update_attachment(clm_att_path: str, *, new_blob_path: Optional[str] = None,
     if raw_extracted_data is not None:
         assignments.append("raw_extracted_data=%s::jsonb")
         params.append(json.dumps(raw_extracted_data))
+    if page_count is not None:
+        assignments.append("page_count=%s")
+        params.append(page_count)
+    if extracted_files_count is not None:
+        assignments.append("extracted_files_count=%s")
+        params.append(extracted_files_count)
 
     if not assignments:
         return False
@@ -441,11 +449,13 @@ def persist_page_v2(document_id: int, page_result: dict, page_blob_path: str,
                          attachment_type, parent_attachment_id,
                          parent_attachment_name, original_file_name,
                          client_id, group_id, practice_id,
+                         page_count, extracted_files_count,
                          user_id, status,
                          raw_extracted_data, processed_extracted_data,
                          extraction_metadata, processed, sha)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s, %s)
+                        %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb,
+                        %s, %s)
                     RETURNING id""",
                 (
                     None,
@@ -462,6 +472,8 @@ def persist_page_v2(document_id: int, page_result: dict, page_blob_path: str,
                     parent_attachment.get("client_id"),
                     parent_attachment.get("group_id"),
                     parent_attachment.get("practice_id"),
+                    1,
+                    1,
                     ATTACHMENT_USER_ID,
                     ATTACHMENT_STATUS,
                     json.dumps(page_result),
