@@ -454,7 +454,7 @@ def persist_page_v2(document_id: int, page_result: dict, page_blob_path: str,
                          raw_extracted_data, processed_extracted_data,
                          extraction_metadata, processed, sha)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb,
+                        %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb,
                         %s, %s)
                     RETURNING id""",
                 (
