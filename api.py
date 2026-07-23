@@ -101,6 +101,7 @@ class IngestRequest(BaseModel):
 class IngestAllResult(BaseModel):
     queued: List[Dict[str, object]]
     skipped: List["IngestSkipResult"]
+    missed_files: List["IngestSkipResult"]
     excluded_folders: List[str]
 
 
@@ -190,6 +191,7 @@ def ingest_all(bg: BackgroundTasks) -> IngestAllResult:
     folder_payload = folders()
     queued = []
     skipped = []
+    missed_files = []
 
     for folder_name in folder_payload["folders"]:
         if folder_name in INGEST_ALL_EXCLUDE:
@@ -211,7 +213,17 @@ def ingest_all(bg: BackgroundTasks) -> IngestAllResult:
                     blob_path, "already_processed", folder=folder_name))
                 continue
 
-            queue_result = _handle_ingest_blob(blob_path, bg)
+            try:
+                queue_result = _handle_ingest_blob(blob_path, bg)
+            except HTTPException as exc:
+                if exc.status_code == 404 and str(exc.detail).startswith(
+                        "attachment not found for blob path:"):
+                    logger.warning("Missing attachment row for blob path: %s",
+                                   blob_path)
+                    missed_files.append(_build_skip_result(
+                        blob_path, "attachment_not_found", folder=folder_name))
+                    continue
+                raise
             if queue_result is None:
                 skipped.append(_build_skip_result(
                     blob_path,
@@ -222,6 +234,7 @@ def ingest_all(bg: BackgroundTasks) -> IngestAllResult:
     return IngestAllResult(
         queued=queued,
         skipped=skipped,
+        missed_files=missed_files,
         excluded_folders=INGEST_ALL_EXCLUDE,
     )
 
@@ -390,13 +403,12 @@ def _run_blob_ingest_sync(blob_path: str, data: bytes, *, want=None) -> dict:
 
 
 def _queue_blob_ingest(blob_path: str, bg: BackgroundTasks) -> dict:
-    data = storage.download_blob(blob_path)
     context = _resolve_ingest_context(blob_path)
 
     worker = _process if context["source_type"] == "pdf" else _process_image_blob
     logger.info("Queueing %s claim file for processing: %s",
                 context["source_type"], blob_path)
-    bg.add_task(worker, context["attachment_id"], context["stem"], blob_path, data)
+    bg.add_task(worker, context["attachment_id"], context["stem"], blob_path)
     return {
         "document_id": context["attachment_id"],
         "attachment_name": context["attachment_name"],
@@ -409,13 +421,14 @@ def _queue_blob_ingest(blob_path: str, bg: BackgroundTasks) -> dict:
 
 
 def _process(attachment_id: int, stem: str,
-             blob_path: str, pdf_bytes: bytes, want=None):
+             blob_path: str, want=None):
     """Background worker: split -> per-page extract -> upload page -> persist."""
     from PIL import Image
     registry = _registry()
     folder = _blob_folder(blob_path)
     document_id = attachment_id
     try:
+        pdf_bytes = storage.download_blob(blob_path)
         parent_attachment = db.get_attachment_by_id(document_id)
         if not parent_attachment:
             raise HTTPException(404, f"attachment not found: id={document_id}")
@@ -450,7 +463,7 @@ def _process(attachment_id: int, stem: str,
 
 
 def _process_image_blob(attachment_id: int, stem: str,
-                        blob_path: str, image_bytes: bytes, want=None):
+                        blob_path: str, want=None):
     """Background worker for single image blobs."""
     from PIL import Image
 
@@ -458,6 +471,7 @@ def _process_image_blob(attachment_id: int, stem: str,
     folder = _blob_folder(blob_path)
     document_id = attachment_id
     try:
+        image_bytes = storage.download_blob(blob_path)
         parent_attachment = db.get_attachment_by_id(document_id)
         if not parent_attachment:
             raise HTTPException(404, f"attachment not found: id={document_id}")
