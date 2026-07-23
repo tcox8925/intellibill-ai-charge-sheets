@@ -24,6 +24,7 @@ CREATE TABLE "EDI_Tebra".attachments (
     practice_id int4 NULL,
     page_count int4 NULL,
     extracted_files_count int4 NULL,
+    rotation_degrees int4 NULL,
     CONSTRAINT claim_attachments_pkey PRIMARY KEY (id),
     CONSTRAINT attachments_assigned_to_id_fkey FOREIGN KEY (assigned_to_id) REFERENCES rcm.users(id),
     CONSTRAINT attachments_client_id_fkey FOREIGN KEY (client_id) REFERENCES "EDI_Tebra".client(client_id) ON DELETE CASCADE,
