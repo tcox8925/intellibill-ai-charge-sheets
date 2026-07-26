@@ -1,0 +1,920 @@
+{
+  "template_id": "autobuilt_44e25226",
+  "version": 1,
+  "source": "auto-built from page-04.png p1",
+  "status": "active",
+  "fingerprint": {
+    "header_labels": [
+      "Therapeutic Injections",
+      "Labs",
+      "Office Services",
+      "Cardiovascular",
+      "CNS",
+      "Dermatology",
+      "Endocrine",
+      "Gastroenterology",
+      "Genital Urinary System",
+      "Musculoskeletal",
+      "Pulmonary",
+      "Radiology",
+      "Hematology",
+      "Miscellaneous"
+    ],
+    "anchor_codes": [
+      "90656",
+      "60477",
+      "F90.",
+      "L02.43",
+      "R73.01",
+      "N39.0",
+      "K58.0",
+      "F17.210",
+      "81003",
+      "D64.9",
+      "71046",
+      "99080"
+    ]
+  },
+  "header_fields": [
+    "date",
+    "name",
+    "dob",
+    "prn",
+    "insurance",
+    "copay",
+    "amount_paid",
+    "payment_type"
+  ],
+  "sections": [
+    {
+      "section": "Therapeutic Injections",
+      "code_type": "CPT",
+      "cells": [
+        {
+          "code": "90656",
+          "description": "Flu Vaccine dx v04.81"
+        },
+        {
+          "code": "90469",
+          "description": "Pneumo Vac DX V 03.82"
+        },
+        {
+          "code": "90460",
+          "description": "Adm shot or G0009"
+        },
+        {
+          "code": "20600",
+          "description": "Small joint & bursa"
+        },
+        {
+          "code": "20605",
+          "description": "Intermediate joint"
+        },
+        {
+          "code": "20606",
+          "description": "Intermediate joint U/S"
+        },
+        {
+          "code": "20610",
+          "description": "Aspirate Major Joint"
+        },
+        {
+          "code": "20611",
+          "description": "Major Joint U/S"
+        },
+        {
+          "code": "20550",
+          "description": "Inject trigger point 2+"
+        },
+        {
+          "code": "20552",
+          "description": "Single Tendon sheath"
+        },
+        {
+          "code": "11100",
+          "description": "Allergy Combo (2ml) IM Inj"
+        },
+        {
+          "code": "13420",
+          "description": "B-12 1ml IM INJ"
+        },
+        {
+          "code": "10696",
+          "description": "Rocephin 1 g IM INJ"
+        },
+        {
+          "code": "11896",
+          "description": "Toradol 60 mg g/ml INJ"
+        },
+        {
+          "code": "133301",
+          "description": "Kenalog 40mg",
+          "needs_verify": true
+        }
+      ]
+    },
+    {
+      "section": "Office Services",
+      "code_type": "CPT",
+      "cells": [
+        {
+          "code": "60477",
+          "description": "Presumptive Test"
+        },
+        {
+          "code": "87880",
+          "description": "Strep A Test"
+        },
+        {
+          "code": "99204",
+          "description": "Office visit, L4 new"
+        },
+        {
+          "code": "99205",
+          "description": "Office visit, L5 new"
+        },
+        {
+          "code": "99214",
+          "description": "Office visit, L4 Estb"
+        },
+        {
+          "code": "99215",
+          "description": "Office visit, L5 Estb"
+        },
+        {
+          "code": "99395",
+          "description": "Wellness Established 18-39"
+        },
+        {
+          "code": "99396",
+          "description": "Wellness Established 40-64"
+        },
+        {
+          "code": "99397",
+          "description": "Wellness Established 65<"
+        },
+        {
+          "code": "99495",
+          "description": "Follow after hospital visit- 1 wk"
+        },
+        {
+          "code": "99496",
+          "description": "Follow after hospital visit- 2 wk"
+        }
+      ]
+    },
+    {
+      "section": "Cardiovascular",
+      "code_type": "CPT",
+      "cells": [
+        {
+          "code": "173.9",
+          "description": "Peripheral Vascular PVD",
+          "needs_verify": true
+        },
+        {
+          "code": "110",
+          "description": "Unspec Essential HTN"
+        },
+        {
+          "code": "150.9",
+          "description": "Congestive heart failure"
+        },
+        {
+          "code": "1125.10",
+          "description": "CAD",
+          "needs_verify": true
+        },
+        {
+          "code": "R06.0",
+          "description": "Dyspnea"
+        },
+        {
+          "code": "R07.2",
+          "description": "Chest pain Unspec"
+        },
+        {
+          "code": "R03.0",
+          "description": "Elevated BP w/o DX HTN"
+        },
+        {
+          "code": "E78.2",
+          "description": "Pure Hyperglyceridemia"
+        },
+        {
+          "code": "E78.2",
+          "description": "Mixed Hyperlipidemia"
+        },
+        {
+          "code": "195.89",
+          "description": "Hypotension"
+        },
+        {
+          "code": "148.2",
+          "description": "Atrial Fibrillation"
+        },
+        {
+          "code": "151.7",
+          "description": "Cardiomegaly"
+        },
+        {
+          "code": "187.2",
+          "description": "Venous Insufficiency"
+        },
+        {
+          "code": "R00.2",
+          "description": "Palpitations"
+        }
+      ]
+    },
+    {
+      "section": "CNS",
+      "code_type": "MIXED",
+      "cells": [
+        {
+          "code": "F90.",
+          "description": "ADHD",
+          "code_type": "ICD10"
+        },
+        {
+          "code": "169.921",
+          "description": "Cerebrovascular Accident",
+          "code_type": "ICD10"
+        },
+        {
+          "code": "F41.1",
+          "description": "Generalized anxiety Dis",
+          "code_type": "ICD10"
+        },
+        {
+          "code": "R42",
+          "description": "Dizziness/Vertigo",
+          "code_type": "ICD10"
+        },
+        {
+          "code": "R51",
+          "description": "Headache",
+          "code_type": "ICD10"
+        },
+        {
+          "code": "G44.1",
+          "description": "Migraine",
+          "code_type": "ICD10"
+        },
+        {
+          "code": "F51.01",
+          "description": "Insomnia Unspecified",
+          "code_type": "ICD10"
+        },
+        {
+          "code": "F33.9",
+          "description": "Major Depressive Disorder",
+          "code_type": "ICD10"
+        },
+        {
+          "code": "G25.81",
+          "description": "RLS",
+          "code_type": "ICD10"
+        },
+        {
+          "code": "R40.0",
+          "description": "Daytime Somnolence",
+          "code_type": "ICD10"
+        },
+        {
+          "code": "R56.9",
+          "description": "Unspecified convulsions",
+          "code_type": "ICD10"
+        },
+        {
+          "code": "F43.10",
+          "description": "PTSD",
+          "code_type": "ICD10"
+        },
+        {
+          "code": "F31.9",
+          "description": "Bipolar disorder",
+          "code_type": "ICD10"
+        },
+        {
+          "code": "213.89",
+          "description": "Depressions Screening",
+          "code_type": "ICD10",
+          "needs_verify": true
+        }
+      ]
+    },
+    {
+      "section": "Dermatology",
+      "code_type": "CPT",
+      "cells": [
+        {
+          "code": "L02.43",
+          "description": "Limb Carbuncle"
+        },
+        {
+          "code": "L03",
+          "description": "Cellulitis, Location"
+        },
+        {
+          "code": "L40.9",
+          "description": "Psoriasis"
+        },
+        {
+          "code": "L240",
+          "description": "Contact Dermatitis"
+        }
+      ]
+    },
+    {
+      "section": "Endocrine",
+      "code_type": "ICD10",
+      "cells": [
+        {
+          "code": "R73.01",
+          "description": "Other abnormal glucose"
+        },
+        {
+          "code": "E11.42",
+          "description": "DM w/neuropathy"
+        },
+        {
+          "code": "E11.9",
+          "description": "Diabetes II controlled"
+        },
+        {
+          "code": "E11.65",
+          "description": "Diabetes II uncontrolled"
+        },
+        {
+          "code": "E11.65",
+          "description": "Diabetes II w/peripheral cirds"
+        },
+        {
+          "code": "R73.03",
+          "description": "Pre-diabetic"
+        },
+        {
+          "code": "R68.03",
+          "description": "Low libido"
+        },
+        {
+          "code": "R73.9",
+          "description": "Hyperglycemia"
+        },
+        {
+          "code": "R73.01",
+          "description": "Impaired Fasting Glucose"
+        },
+        {
+          "code": "R79.89",
+          "description": "Low Testosterone"
+        },
+        {
+          "code": "E88.81",
+          "description": "Metabolic Syndrome"
+        },
+        {
+          "code": "N95.1",
+          "description": "Menopause"
+        },
+        {
+          "code": "R60.1",
+          "description": "Edema"
+        },
+        {
+          "code": "R60.9",
+          "description": "Unspecified Hypothyroidism"
+        },
+        {
+          "code": "E03.9",
+          "description": "Hypogonadism"
+        },
+        {
+          "code": "E29.1",
+          "description": "Impotence Organic Origin"
+        },
+        {
+          "code": "N52.9",
+          "description": "Hypopituitarism",
+          "needs_verify": true
+        },
+        {
+          "code": "R53.",
+          "description": "Malaise & fatigue Neck"
+        },
+        {
+          "code": "E66.01",
+          "description": "Morbid Obesity"
+        },
+        {
+          "code": "R63.2",
+          "description": "Polyphagia"
+        },
+        {
+          "code": "E66.3",
+          "description": "Overweight"
+        },
+        {
+          "code": "E55.9",
+          "description": "Vitamin D Deficiency"
+        },
+        {
+          "code": "E28.1",
+          "description": "Elevated Androgen"
+        },
+        {
+          "code": "E28.0",
+          "description": "Elevated Estrogen"
+        }
+      ]
+    },
+    {
+      "section": "Gastroenterology",
+      "code_type": "ICD10",
+      "cells": [
+        {
+          "code": "R27.9",
+          "description": "PUD",
+          "needs_verify": true
+        },
+        {
+          "code": "K59.00",
+          "description": "Constipation"
+        },
+        {
+          "code": "K21.9",
+          "description": "Esophageal Reflux"
+        }
+      ]
+    },
+    {
+      "section": "Genital Urinary System",
+      "code_type": "ICD10",
+      "cells": [
+        {
+          "code": "N39.0",
+          "description": "Dysuria"
+        },
+        {
+          "code": "R30.0",
+          "description": "Urinary Tract Infection"
+        },
+        {
+          "code": "N18.6",
+          "description": "ESRD"
+        },
+        {
+          "code": "R32",
+          "description": "Urinary Incontinence"
+        },
+        {
+          "code": "N40.0",
+          "description": "BPH"
+        }
+      ]
+    },
+    {
+      "section": "Musculoskeletal",
+      "code_type": "ICD10",
+      "cells": [
+        {
+          "code": "K58.0",
+          "description": "IBS w/Diarrhea"
+        },
+        {
+          "code": "K58.9",
+          "description": "IBS w/Diarrhea"
+        },
+        {
+          "code": "K64.9",
+          "description": "Hemm"
+        },
+        {
+          "code": "R10.",
+          "description": "Abdominal Pain"
+        },
+        {
+          "code": "R11.2",
+          "description": "Nausea/vomiting"
+        },
+        {
+          "code": "R19.7",
+          "description": "Diarrhea"
+        },
+        {
+          "code": "R74.0",
+          "description": "Elevated Art"
+        },
+        {
+          "code": "K20.0",
+          "description": "Reflux esophagitis"
+        },
+        {
+          "code": "K66.0",
+          "description": "Peritoneal adhesions"
+        },
+        {
+          "code": "B96.81",
+          "description": "H-Pylori Infection"
+        },
+        {
+          "code": "K30",
+          "description": "Non Ulcer Dispepsia"
+        },
+        {
+          "code": "R14.0",
+          "description": "Abdominal Distension"
+        },
+        {
+          "code": "M76.3",
+          "description": "Iliotibial band syndrome"
+        },
+        {
+          "code": "M54.2",
+          "description": "Cervicalgia"
+        },
+        {
+          "code": "M75.",
+          "description": "Disbursac&Ten/Shoulder"
+        },
+        {
+          "code": "M77.9",
+          "description": "Enthesopathy"
+        },
+        {
+          "code": "M25.729",
+          "description": "Ethesopathy of Elbow"
+        },
+        {
+          "code": "M70.50",
+          "description": "Ethesopathy of Knee"
+        },
+        {
+          "code": "M70.7",
+          "description": "Hip Bursitis"
+        },
+        {
+          "code": "M76.0",
+          "description": "Spinal Enthesopathy"
+        },
+        {
+          "code": "M46.00",
+          "description": "Lumbago"
+        },
+        {
+          "code": "M54.5",
+          "description": "Muscle Spasm of the neck"
+        },
+        {
+          "code": "M62.838",
+          "description": "Muscle Spasm (back)"
+        },
+        {
+          "code": "M62.830",
+          "description": "Osteoarthritis Generalized"
+        },
+        {
+          "code": "M15.0",
+          "description": "Pan Vertebral Muscle spasm"
+        },
+        {
+          "code": "M54.6",
+          "description": "Calcaneal Spur Unsp. Foot"
+        },
+        {
+          "code": "M77.30",
+          "description": "Plantar Fasciitis"
+        },
+        {
+          "code": "M72",
+          "description": "Pain in thoracic Spine"
+        },
+        {
+          "code": "M54.6",
+          "description": "Rheumatoid Arth."
+        },
+        {
+          "code": "M06.9",
+          "description": "Impingement Syndrome/SH"
+        },
+        {
+          "code": "M75.40",
+          "description": "Pain left arm"
+        },
+        {
+          "code": "M79.602",
+          "description": "Carpal Tunnel Syndrome"
+        },
+        {
+          "code": "G56.00",
+          "description": "Elevated Uric Acid"
+        },
+        {
+          "code": "E79",
+          "description": "Gout Unspec."
+        },
+        {
+          "code": "M10.9",
+          "description": "Myalgia"
+        },
+        {
+          "code": "M79.1",
+          "description": "Myalgia"
+        }
+      ]
+    },
+    {
+      "section": "Pulmonary",
+      "code_type": "ICD10",
+      "cells": [
+        {
+          "code": "F17.210",
+          "description": "Nicotine Depend"
+        },
+        {
+          "code": "R06.00",
+          "description": "Dyspnea"
+        },
+        {
+          "code": "G47.33",
+          "description": "Osa sleep Apnea"
+        },
+        {
+          "code": "J30",
+          "description": "Allergic Rhinitis Unspec."
+        },
+        {
+          "code": "J45.9",
+          "description": "Asthma Unspec."
+        },
+        {
+          "code": "J00",
+          "description": "Common Cold"
+        },
+        {
+          "code": "R05",
+          "description": "Cough"
+        },
+        {
+          "code": "J44.1",
+          "description": "COBronchitis w Acute Exac"
+        }
+      ]
+    },
+    {
+      "section": "Labs",
+      "code_type": "CPT",
+      "cells": [
+        {
+          "code": "81003",
+          "description": "U/A w/o micro dx/200.01"
+        },
+        {
+          "code": "81000",
+          "description": "U/A w/micro (diabetes)"
+        },
+        {
+          "code": "80305",
+          "description": "Urine Drug Screen"
+        },
+        {
+          "code": "83036",
+          "description": "A1C"
+        },
+        {
+          "code": "85610",
+          "description": "PT-INR"
+        },
+        {
+          "code": "82962",
+          "description": "Glucose Finger Stick"
+        },
+        {
+          "code": "88164",
+          "description": "Pap smear-not-MC/V76.2"
+        },
+        {
+          "code": "87804",
+          "description": "Influenza Test A&B"
+        },
+        {
+          "code": "87426",
+          "description": "Covid-19 + OR -"
+        },
+        {
+          "code": "87636",
+          "description": "Covid & FLU"
+        },
+        {
+          "code": "87814",
+          "description": "Flu"
+        }
+      ]
+    },
+    {
+      "section": "Hematology",
+      "code_type": "ICD10",
+      "cells": [
+        {
+          "code": "D64.9",
+          "description": "Anemia, Unspecified"
+        },
+        {
+          "code": "E61.1",
+          "description": "Iron Deficiency"
+        },
+        {
+          "code": "D75.1",
+          "description": "Secondary Polycythemia"
+        }
+      ]
+    },
+    {
+      "section": "Radiology",
+      "code_type": "CPT",
+      "cells": [
+        {
+          "code": "71046",
+          "description": "Chest PA & Lat"
+        },
+        {
+          "code": "72100",
+          "description": "Spine Lumbar AP & Lat"
+        },
+        {
+          "code": "73100",
+          "description": "Hand X-Ray"
+        },
+        {
+          "code": "73030",
+          "description": "Shoulder Xray"
+        },
+        {
+          "code": "73630",
+          "description": "Foot X-ray"
+        },
+        {
+          "code": "73560",
+          "description": "Knee X-ray"
+        }
+      ]
+    },
+    {
+      "section": "Miscellaneous",
+      "code_type": "CPT",
+      "cells": [
+        {
+          "code": "99080",
+          "description": "FMLA PPWK"
+        },
+        {
+          "code": "95249",
+          "description": "Patient Educa (sensor)"
+        },
+        {
+          "code": "95250",
+          "description": "Diabetic Sensor Placement"
+        },
+        {
+          "code": "95251",
+          "description": "Interpret Sensor Results"
+        },
+        {
+          "code": "93923",
+          "description": "ABI"
+        },
+        {
+          "code": "93922",
+          "description": "Intermittent Claudication"
+        },
+        {
+          "code": "170.213",
+          "description": "Ear Lavage",
+          "needs_verify": true
+        },
+        {
+          "code": "69200",
+          "description": "EKG"
+        },
+        {
+          "code": "1000",
+          "description": "Dehydration",
+          "needs_verify": true
+        },
+        {
+          "code": "E86.0",
+          "description": "Fever",
+          "needs_verify": true
+        },
+        {
+          "code": "R50.81",
+          "description": "Obesity Consult 15 mins",
+          "needs_verify": true
+        },
+        {
+          "code": "95165",
+          "description": "Obesity Consult 30 mins",
+          "needs_verify": true
+        },
+        {
+          "code": "95117",
+          "description": "Dietary Counseling",
+          "needs_verify": true
+        },
+        {
+          "code": "17640",
+          "description": "Vit B12 Deficiency",
+          "needs_verify": true
+        },
+        {
+          "code": "99361",
+          "description": "Chronic Pain Syndrome",
+          "needs_verify": true
+        },
+        {
+          "code": "95145.82",
+          "description": "Chronic Fatigue",
+          "needs_verify": true
+        },
+        {
+          "code": "81120",
+          "description": "H Pylori Whole blood Test",
+          "needs_verify": true
+        },
+        {
+          "code": "99361",
+          "description": "Opioid Abuse",
+          "needs_verify": true
+        },
+        {
+          "code": "",
+          "description": "Opioid Dependence",
+          "needs_verify": true
+        },
+        {
+          "code": "",
+          "description": "Routine Venipuncture",
+          "needs_verify": true
+        },
+        {
+          "code": "",
+          "description": "Allergy Testing",
+          "needs_verify": true
+        },
+        {
+          "code": "95165",
+          "description": "Custom Allergy Meds",
+          "needs_verify": true
+        },
+        {
+          "code": "95117",
+          "description": "Allergy Med Injection",
+          "needs_verify": true
+        },
+        {
+          "code": "17640",
+          "description": "Breathing Treatment",
+          "needs_verify": true
+        },
+        {
+          "code": "99361",
+          "description": "DuoNeb Medication",
+          "needs_verify": true
+        },
+        {
+          "code": "",
+          "description": "IV Admin. 1 HR",
+          "needs_verify": true
+        },
+        {
+          "code": "",
+          "description": "IV Admin. Each addit. HR",
+          "needs_verify": true
+        }
+      ]
+    },
+    {
+      "section": "Therapeutic Injections",
+      "code_type": "CPT",
+      "cells": [
+        {
+          "code": "17003",
+          "description": "Removal ActinicKeratosis"
+        },
+        {
+          "code": "17110",
+          "description": "Removal Lesions <14"
+        },
+        {
+          "code": "54056",
+          "description": "Cryosurgery-Male"
+        },
+        {
+          "code": "56501",
+          "description": "Cryosurgery-Female"
+        }
+      ]
+    }
+  ]
+}
