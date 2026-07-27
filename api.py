@@ -308,18 +308,40 @@ def _archive_blob_path(blob_path: str, archive_folder_path: str, *,
     }
 
 
-def archive_completed(blob_path: str, document_id: int, results,
-                      page_count: int):
-    result = _archive_blob_path(
+def finalize_processed_attachment(blob_path: str, document_id: int, results,
+                                  page_count: int):
+    updated = db.update_attachment(
         blob_path,
-        construct_archive_folder_path(blob_path),
-        status="C",
+        processed=True,
         raw_extracted_data=results,
         page_count=page_count,
         extracted_files_count=page_count,
     )
+    if not updated:
+        raise HTTPException(500, "attachment finalization update failed")
+
+    result = {
+        "status": "processed",
+        "blob_path": blob_path,
+        "attachment_name": os.path.basename(blob_path),
+        "processed": True,
+        "page_count": page_count,
+        "extracted_files_count": page_count,
+    }
+    attachment = db.get_attachment_by_path(blob_path)
+    if attachment:
+        result["attachment_id"] = attachment["id"]
     result["document_id"] = document_id
     return result
+
+
+def archive_for_processing(blob_path: str) -> dict:
+    return _archive_blob_path(
+        blob_path,
+        construct_archive_folder_path(blob_path),
+        status="C",
+        processed=False,
+    )
 
 
 def _build_skip_result(blob_path: Optional[str], reason: str,
@@ -355,7 +377,8 @@ def _mark_unsupported_processed(blob_path: str):
 
 def _handle_ingest_blob(blob_path: str, bg: BackgroundTasks) -> Optional[dict]:
     if storage.is_pdf_path(blob_path) or storage.is_image_path(blob_path):
-        return _queue_blob_ingest(blob_path, bg)
+        archive_result = archive_for_processing(blob_path)
+        return _queue_blob_ingest(archive_result["new_blob_path"], bg)
 
     _mark_unsupported_processed(blob_path)
     return None
@@ -510,7 +533,7 @@ def _finalize_processed_blob(document_id: int, blob_path: str, page_count: int,
     except Exception as exc:
         logger.warning("Skipping legacy document status update for %s: %s",
                        document_id, exc)
-    archive_completed(blob_path, document_id, results, page_count)
+    finalize_processed_attachment(blob_path, document_id, results, page_count)
 
 
 def _mark_processing_failed(document_id: int, error: Exception):
