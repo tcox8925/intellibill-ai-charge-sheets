@@ -78,7 +78,7 @@ Immediate sub-steps:
 Stage 4A: PDF split
 Function: `split_pdf()` in run.py
 Role:
-- runs `pdftoppm` to rasterize the PDF into page PNGs
+- uses the shared PyMuPDF-based rasterizer to convert the PDF into page PNGs
 - writes files like `pages/page-01.png`, `pages/page-02.png`, etc.
 - returns the sorted list of image paths
 

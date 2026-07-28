@@ -504,10 +504,12 @@ def _process_image_blob(attachment_id: int, stem: str,
             with open(image_path, "wb") as file_obj:
                 file_obj.write(image_bytes)
 
-            payload = image_ocr.process_image(image_path, _client(), registry)
-            normalized_path = image_ocr.normalize_image_to_png(image_path, tmp)
+            client = _client()
+            upright_png_path, _ = image_ocr.prepare_image_for_ocr(
+                image_path, client, tmp)
+            payload = image_ocr.process_image(upright_png_path, client, registry)
             uploaded_blob_path = storage.upload_page(
-                blob_path, 1, Image.open(normalized_path))
+                blob_path, 1, Image.open(upright_png_path))
 
         result = payload["pages"][0]
         db.persist_page_v2(document_id, result,

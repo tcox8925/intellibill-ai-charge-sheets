@@ -16,10 +16,11 @@ catalog is directly usable. If a build ever comes out wrong, rescan/rebuild.
 Auth is shared with run.py (EOB KV -> Foundry, or env fallback).
 """
 
-import argparse, base64, io, json, os, subprocess, glob, re, tempfile
+import argparse, base64, io, json, os, re, tempfile
 from PIL import Image
 
 from extract import MODEL          # shared Opus model string
+from pdf_raster import render_pdf_page
 
 # Section headers we expect on this family of superbills — also used as the
 # fingerprint's label anchors. Editable if a new form drops/renames sections.
@@ -62,14 +63,16 @@ def build_prompt(sections: list[str]) -> str:
         "partially illegible, give your best reading and set confidence < 0.5."
     )
 
-def load_image_b64(path: str, page: int, dpi: int = 300, rotate: int = 90,
+def load_image_b64(path: str, page: int, dpi: int = 300,
+                   rotate: int = int(os.environ.get("CHARGE_ROTATE", "0")),
                    max_px: int = 2600) -> str:
+    # In the pipeline this receives an already-upright page PNG (run.py
+    # normalizes orientation first), so rotate defaults to 0. Honors
+    # CHARGE_ROTATE for standalone use on a raw scan.
     # render one page to PNG (high DPI: catalog accuracy is worth it, it's 1x)
     if path.lower().endswith(".pdf"):
         d = tempfile.mkdtemp()
-        subprocess.run(["pdftoppm", "-png", "-r", str(dpi), "-f", str(page),
-                        "-l", str(page), path, os.path.join(d, "p")], check=True)
-        path = glob.glob(os.path.join(d, "p-*.png"))[0]
+    path = render_pdf_page(path, d, page, dpi)
     im = Image.open(path)
     if rotate:
         im = im.rotate(rotate, expand=True)

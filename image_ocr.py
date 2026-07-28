@@ -8,11 +8,11 @@ result structure that mirrors the PDF pipeline for one page.
 import json
 import os
 import tempfile
-from typing import Optional, Set
+from typing import Optional
 
 from PIL import Image
 
-from extract import extract_page, identify_page, load_page_b64
+from extract import extract_page, identify_page, load_page_b64, detect_orientation
 from fingerprint import STRONG, _norm
 import run
 
@@ -32,6 +32,17 @@ def normalize_image_to_png(image_path: str, out_dir: Optional[str] = None) -> st
     return out_path
 
 
+def prepare_image_for_ocr(image_path: str, client, out_dir: Optional[str] = None) -> tuple[str, int]:
+    """Normalize an image to PNG, detect its orientation, and write back an
+    upright PNG for downstream OCR and upload."""
+    png_path = normalize_image_to_png(image_path, out_dir)
+    rotation = detect_orientation(png_path, client)
+    if rotation:
+        with Image.open(png_path) as image:
+            image.rotate(rotation, expand=True).save(png_path, format="PNG")
+    return png_path, rotation
+
+
 def process_image(image_path: str, client=None, registry=None,
                   auto_build: bool = True) -> dict:
     """Process a single image and return a one-page OCR result payload."""
@@ -39,10 +50,45 @@ def process_image(image_path: str, client=None, registry=None,
     registry = registry or run.load_registry()
 
     with tempfile.TemporaryDirectory() as tmp:
-        png_path = normalize_image_to_png(image_path, tmp)
+        png_path, rotation = prepare_image_for_ocr(image_path, client, tmp)
 
-        seen_labels, seen_codes = identify_page(png_path, client)
+        seen_labels, seen_codes, is_cs, cs_conf = identify_page(png_path, client)
         cat_path, catalog, score = run.pick_catalog(seen_labels, seen_codes, registry)
+        recognized = run.looks_like_chargesheet(is_cs, cs_conf, seen_labels, seen_codes) \
+            or score >= STRONG
+
+        if not recognized:
+            result = {
+                "page": 1,
+                "template_ok": False,
+                "orientation": {
+                    "applied_rotation_deg": rotation,
+                    "detected": True,
+                    "method": "haiku",
+                    "raw_detected_deg": rotation,
+                },
+                "header": {},
+                "circled_procedures": [],
+                "circled_diagnoses": [],
+                "possible_marks": [],
+                "notes": [],
+                "recognition": {
+                    "is_chargesheet": False,
+                    "confidence": cs_conf,
+                    "seen_sections": seen_labels,
+                    "seen_codes_sample": (seen_codes or [])[:8],
+                },
+                "flags": ["not_chargesheet", "skipped_no_extraction"],
+                "template_match": {"state": "not_chargesheet", "score": round(score, 2)},
+            }
+            return {
+                "source_file": os.path.basename(image_path),
+                "page_count": 1,
+                "orientation": run.orientation_info([result]),
+                "pages": [result],
+                "metrics": run.build_metrics(image_path, [result]),
+            }
+
         template_state = "known" if score >= STRONG else "miss"
 
         if template_state == "miss" and not seen_labels and not seen_codes and registry:
@@ -80,7 +126,18 @@ def process_image(image_path: str, client=None, registry=None,
             "catalog": os.path.basename(cat_path),
             "template_id": catalog.get("template_id"),
         }
+        result["recognition"] = {"is_chargesheet": True, "confidence": cs_conf}
+        result["orientation"] = {
+            "applied_rotation_deg": rotation,
+            "detected": True,
+            "method": "haiku",
+            "raw_detected_deg": rotation,
+        }
+        if result.get("template_ok") is False:
+            result.setdefault("flags", []).append("template_mismatch")
         header = result.get("header", {}) or {}
+        for flag in run.check_dates(header):
+            result.setdefault("flags", []).append(flag)
         if not any(((header.get("name") or "").strip(), (header.get("dob") or "").strip())):
             result.setdefault("flags", []).append("blank_header")
         result["page"] = 1
@@ -88,6 +145,7 @@ def process_image(image_path: str, client=None, registry=None,
     payload = {
         "source_file": os.path.basename(image_path),
         "page_count": 1,
+        "orientation": run.orientation_info([result]),
         "pages": [result],
         "metrics": run.build_metrics(image_path, [result]),
     }
