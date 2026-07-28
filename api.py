@@ -46,6 +46,14 @@ import run
 
 app = FastAPI(title="834 Charge-sheet OCR", version="1.0")
 
+# chargesheet_logger = logging.getLogger("chargesheet")
+# if not chargesheet_logger.handlers:
+#     handler = logging.StreamHandler()
+#     handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+#     chargesheet_logger.addHandler(handler)
+# chargesheet_logger.setLevel(logging.INFO)
+# chargesheet_logger.propagate = False
+
 logger = logging.getLogger("chargesheet.api")
 
 INGEST_ALL_EXCLUDE = [
@@ -315,7 +323,7 @@ def _archive_blob_path(blob_path: str, archive_folder_path: str, *,
 
 def finalize_processed_attachment(blob_path: str, document_id: int, results,
                                   page_count: int):
-    rotation_degrees = _mode_raw_detected_rotation(results)
+    rotation_degrees = _mode_applied_rotation(results)
     updated = db.update_attachment(
         blob_path,
         status="C",
@@ -344,11 +352,11 @@ def finalize_processed_attachment(blob_path: str, document_id: int, results,
     return result
 
 
-def _mode_raw_detected_rotation(results) -> Optional[int]:
+def _mode_applied_rotation(results) -> Optional[int]:
     rotations = []
     for result in results or []:
         orientation = result.get("orientation") or {}
-        rotation = orientation.get("raw_detected_deg")
+        rotation = orientation.get("applied_rotation_deg")
         if rotation is None:
             continue
         try:
@@ -565,7 +573,7 @@ def _process_image_blob(attachment_id: int, stem: str,
                 file_obj.write(image_bytes)
 
             client = _client()
-            upright_png_path, _ = image_ocr.prepare_image_for_ocr(
+            upright_png_path, _, _ = image_ocr.prepare_image_for_ocr(
                 image_path, client, tmp)
             payload = image_ocr.process_image(upright_png_path, client, registry)
             uploaded_blob_path = storage.upload_page(

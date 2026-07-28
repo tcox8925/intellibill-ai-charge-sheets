@@ -15,8 +15,10 @@ In-tenant you would swap the client for your Azure OpenAI/Anthropic deployment
 and keep KV/VNet auth exactly like pch-eob-pipeline.
 """
 
-import base64, io, json, os, re, time
+import base64, io, json, logging, os, re, time
 from PIL import Image
+
+logger = logging.getLogger("chargesheet.extract")
 
 # Mirror EOB v9 auth.py: Opus via AnthropicFoundry, model string from auth.
 # Falls back to a plain string if auth.py isn't importable (e.g. this sandbox).
@@ -220,19 +222,19 @@ ORIENT_SYSTEM = (
 )
 
 
+def clockwise_restoration_rotation(raw_clockwise_deg: int) -> int:
+    """Clockwise rotation needed to restore an image to upright."""
+    return (-int(raw_clockwise_deg)) % 360
+
+
 def detect_orientation(path: str, client) -> int:
-    """Cheap Haiku pass on the RAW (unrotated) page. Returns the counter-
-    clockwise rotation in degrees (0, 90, 180, or 270) to apply with PIL
-    im.rotate(deg, expand=True) so the printed text is upright and reads
-    left-to-right. run.py uses this to normalize each page before extraction.
-    Falls back to 90 (the historical scan prior) if the call fails or the
-    answer isn't one of the four right angles."""
+    """Cheap Haiku pass on the raw page. Returns `rotate_ccw` as 0/90/180/270,
+    defaulting to 0 on failure or invalid output."""
     img = load_page_b64(path, rotate=0)   # RAW — do not pre-rotate
     prompt = (
         'Return JSON only: {"rotate_ccw": 0|90|180|270}.\n'
-        "The scanned page may be rotated. rotate_ccw = the degrees to rotate "
-        "the image COUNTER-CLOCKWISE so the printed text is upright and reads "
-        "left-to-right (0 if it is already upright)."
+        "rotate_ccw = degrees to rotate the image COUNTER-CLOCKWISE so the "
+        "printed text becomes upright and reads left-to-right (0 if already upright)."
     )
     try:
         msg = client.messages.create(
@@ -243,10 +245,13 @@ def detect_orientation(path: str, client) -> int:
                 {"type": "text", "text": prompt}]}],
         )
         text = "".join(b.text for b in msg.content if b.type == "text")
-        deg = int(_parse_json(text).get("rotate_ccw", 90)) % 360
-        return deg if deg in (0, 90, 180, 270) else 90
+        payload = _parse_json(text)
+        # logger.info("Orientation payload: %s", payload)
+        deg = int(payload.get("rotate_ccw", 0)) % 360
+        return deg if deg in (0, 90, 180, 270) else 0
     except Exception:
-        return 90
+        # logger.exception("Orientation detection failed for %s", path)
+        return 0
 
 
 def identify_page(path: str, client, retries: int = 2) -> tuple:

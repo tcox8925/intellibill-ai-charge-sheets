@@ -21,7 +21,7 @@ Set ANTHROPIC_API_KEY (prototype only; in-tenant use your KV-backed client).
 import argparse, json, os, re, sys, glob, hashlib, datetime
 from catalog_paths import catalog_glob_pattern, catalog_input_path, catalog_output_path
 from extract import (extract_page, identify_page, load_page_b64, array_b64,
-                     detect_orientation)
+                     detect_orientation, clockwise_restoration_rotation)
 from fingerprint import STRONG, score, _norm
 from build_catalog import build_catalog
 from pdf_raster import render_pdf_pages
@@ -116,12 +116,13 @@ def normalize_orientation(pages: list, client) -> dict:
 
     info = {}
     for i, path in enumerate(pages, start=1):
-        deg, overridden = raw[i], False
-        if dominant and deg != mode:
-            deg, overridden = mode, True
-        if deg:
-            Image.open(path).rotate(deg, expand=True).save(path)
-        info[i] = {"applied_rotation_deg": deg, "detected": True, "method": "haiku",
+        raw_deg, overridden = raw[i], False
+        if dominant and raw_deg != mode:
+            raw_deg, overridden = mode, True
+        applied_deg = clockwise_restoration_rotation(raw_deg)
+        if applied_deg:
+            Image.open(path).rotate(-applied_deg, expand=True).save(path)
+        info[i] = {"applied_rotation_deg": applied_deg, "detected": True, "method": "haiku",
                    "raw_detected_deg": raw[i]}
         if overridden:
             info[i]["overridden_to_batch_mode"] = True

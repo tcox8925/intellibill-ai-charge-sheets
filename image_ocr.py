@@ -13,7 +13,8 @@ from typing import Optional
 from PIL import Image
 
 from catalog_paths import catalog_output_path
-from extract import extract_page, identify_page, load_page_b64, detect_orientation
+from extract import (extract_page, identify_page, load_page_b64,
+                     detect_orientation, clockwise_restoration_rotation)
 from fingerprint import STRONG, _norm
 import run
 
@@ -33,15 +34,16 @@ def normalize_image_to_png(image_path: str, out_dir: Optional[str] = None) -> st
     return out_path
 
 
-def prepare_image_for_ocr(image_path: str, client, out_dir: Optional[str] = None) -> tuple[str, int]:
+def prepare_image_for_ocr(image_path: str, client, out_dir: Optional[str] = None) -> tuple[str, int, int]:
     """Normalize an image to PNG, detect its orientation, and write back an
     upright PNG for downstream OCR and upload."""
     png_path = normalize_image_to_png(image_path, out_dir)
-    rotation = detect_orientation(png_path, client)
-    if rotation:
+    raw_rotation = detect_orientation(png_path, client)
+    applied_rotation = clockwise_restoration_rotation(raw_rotation)
+    if applied_rotation:
         with Image.open(png_path) as image:
-            image.rotate(rotation, expand=True).save(png_path, format="PNG")
-    return png_path, rotation
+            image.rotate(-applied_rotation, expand=True).save(png_path, format="PNG")
+    return png_path, raw_rotation, applied_rotation
 
 
 def process_image(image_path: str, client=None, registry=None,
@@ -51,7 +53,8 @@ def process_image(image_path: str, client=None, registry=None,
     registry = registry or run.load_registry()
 
     with tempfile.TemporaryDirectory() as tmp:
-        png_path, rotation = prepare_image_for_ocr(image_path, client, tmp)
+        png_path, raw_rotation, applied_rotation = prepare_image_for_ocr(
+            image_path, client, tmp)
 
         seen_labels, seen_codes, is_cs, cs_conf = identify_page(png_path, client)
         cat_path, catalog, score = run.pick_catalog(seen_labels, seen_codes, registry)
@@ -63,10 +66,10 @@ def process_image(image_path: str, client=None, registry=None,
                 "page": 1,
                 "template_ok": False,
                 "orientation": {
-                    "applied_rotation_deg": rotation,
+                    "applied_rotation_deg": applied_rotation,
                     "detected": True,
                     "method": "haiku",
-                    "raw_detected_deg": rotation,
+                    "raw_detected_deg": raw_rotation,
                 },
                 "header": {},
                 "circled_procedures": [],
@@ -129,10 +132,10 @@ def process_image(image_path: str, client=None, registry=None,
         }
         result["recognition"] = {"is_chargesheet": True, "confidence": cs_conf}
         result["orientation"] = {
-            "applied_rotation_deg": rotation,
+            "applied_rotation_deg": applied_rotation,
             "detected": True,
             "method": "haiku",
-            "raw_detected_deg": rotation,
+            "raw_detected_deg": raw_rotation,
         }
         if result.get("template_ok") is False:
             result.setdefault("flags", []).append("template_mismatch")
