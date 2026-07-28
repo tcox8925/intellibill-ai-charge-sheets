@@ -404,8 +404,8 @@ def _handle_ingest_blob(blob_path: str, bg: BackgroundTasks) -> Optional[dict]:
         original_blob_path = blob_path
         archive_result = archive_for_processing(blob_path)
         return _queue_blob_ingest(
+            archive_result["new_blob_path"],
             bg,
-            archived_blob_path=archive_result["new_blob_path"],
             original_blob_path=original_blob_path,
         )
 
