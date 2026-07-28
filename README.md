@@ -6,7 +6,7 @@ layer), and the printed grid is identical on every page — so **vision is
 primary** and the **template is extracted once**, not per page.
 
 ## Files
-- `catalog.json` — the template catalog (14 sections, ~200 codes, CPT + ICD-10).
+- `catalogues/catalog.json` — the template catalog (14 sections, ~200 codes, CPT + ICD-10).
   Built **once per template**, hand-verified. `needs_verify: true` marks the 6
   cells partly obscured/ambiguous on the sample scan — confirm before production.
 - `extract.py` — per-page: rotate upright → inject catalog → one Opus vision

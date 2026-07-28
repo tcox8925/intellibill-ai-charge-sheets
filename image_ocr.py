@@ -12,6 +12,7 @@ from typing import Optional
 
 from PIL import Image
 
+from catalog_paths import catalog_output_path
 from extract import extract_page, identify_page, load_page_b64, detect_orientation
 from fingerprint import STRONG, _norm
 import run
@@ -111,7 +112,7 @@ def process_image(image_path: str, client=None, registry=None,
 
             key = "|".join(sorted(_norm(label) for label in seen_labels)) or "unknown"
             template_id = "autobuilt_" + run.hashlib.md5(key.encode()).hexdigest()[:8]
-            cat_path = f"catalog_{template_id}.json"
+            cat_path = catalog_output_path(f"catalog_{template_id}.json")
             if not os.path.exists(cat_path):
                 run.build_catalog(png_path, client, page=1, out=cat_path, template_id=template_id)
             with open(cat_path) as file_obj:

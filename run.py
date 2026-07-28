@@ -19,6 +19,7 @@ Set ANTHROPIC_API_KEY (prototype only; in-tenant use your KV-backed client).
 """
 
 import argparse, json, os, re, sys, glob, hashlib, datetime
+from catalog_paths import catalog_glob_pattern, catalog_input_path, catalog_output_path
 from extract import (extract_page, identify_page, load_page_b64, array_b64,
                      detect_orientation)
 from fingerprint import STRONG, score, _norm
@@ -60,11 +61,16 @@ def looks_like_chargesheet(is_cs, conf, labels, codes) -> bool:
 
 
 def load_registry(explicit: str = None) -> list:
-    """Load every known catalog (catalog*.json) into a registry. A rescan of a
-    known form matches on content anchors and reuses it — no rebuild."""
+    """Load every known catalog from `catalogues/` into a registry. A rescan of
+    a known form matches on content anchors and reuses it — no rebuild."""
     reg = {}
-    paths = ([explicit] if explicit and os.path.exists(explicit) else []) + \
-            sorted(glob.glob("catalog*.json"))
+    explicit_path = None
+    if explicit:
+        resolved = catalog_input_path(explicit)
+        if os.path.exists(resolved):
+            explicit_path = resolved
+    paths = ([explicit_path] if explicit_path else []) + \
+            sorted(glob.glob(catalog_glob_pattern()))
     for p in paths:
         if p in reg:
             continue
@@ -242,7 +248,7 @@ def process_pdf(pdf_path: str, client, registry, *, pages_dir: str = "pages",
                 continue
             key = "|".join(sorted(_norm(s) for s in seen_labels)) or "unknown"
             tid = "autobuilt_" + hashlib.md5(key.encode()).hexdigest()[:8]
-            cat_path = f"catalog_{tid}.json"
+            cat_path = catalog_output_path(f"catalog_{tid}.json")
             if not os.path.exists(cat_path):
                 build_catalog(path, client, page=1, out=cat_path, template_id=tid)
             catalog = json.load(open(cat_path))

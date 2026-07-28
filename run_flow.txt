@@ -59,7 +59,7 @@ Function: `load_registry()` in run.py
 Role:
 - loads known catalog JSON files into memory
 - uses the explicit catalog if provided
-- also scans `catalog*.json`
+- also scans `catalogues/catalog*.json`
 
 Why this exists:
 - the extractor does not want to rediscover a known form template every time
@@ -149,7 +149,7 @@ Called only when:
 - `--no-auto-build` is not set
 
 Role:
-- builds a new catalog JSON from a representative page
+- builds a new catalog JSON under `catalogues/` from a representative page
 
 Sub-flow of `build_catalog(...)`:
 1. `load_image_b64(...)`
@@ -159,7 +159,7 @@ Sub-flow of `build_catalog(...)`:
    Role:
    - sends a large vision request to read the printed code grid
    - returns structured sections and cells
-3. writes `catalog_<template_id>.json`
+3. writes `catalogues/catalog_<template_id>.json`
 
 Why this exists:
 - lets the pipeline adapt to a new but similar form layout without manual coding first
