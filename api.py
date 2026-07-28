@@ -318,6 +318,7 @@ def finalize_processed_attachment(blob_path: str, document_id: int, results,
     rotation_degrees = _mode_raw_detected_rotation(results)
     updated = db.update_attachment(
         blob_path,
+        status="C",
         processed=True,
         raw_extracted_data=results,
         page_count=page_count,
@@ -363,7 +364,6 @@ def archive_for_processing(blob_path: str) -> dict:
     return _archive_blob_path(
         blob_path,
         construct_archive_folder_path(blob_path),
-        status="C",
         processed=False,
     )
 
