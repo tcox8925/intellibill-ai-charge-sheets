@@ -29,6 +29,7 @@ Auth is the same KV/VNet story as pch-eob-pipeline (via run.make_client / db).
 import os
 import tempfile
 import logging
+from collections import Counter
 from datetime import date
 from typing import Dict, List
 from typing import Optional, Union
@@ -287,6 +288,7 @@ def _archive_blob_path(blob_path: str, archive_folder_path: str, *,
             raw_extracted_data=attachment.get("raw_extracted_data"),
             page_count=attachment.get("page_count"),
             extracted_files_count=attachment.get("extracted_files_count"),
+            rotation_degrees=attachment.get("rotation_degrees"),
         )
         if not rollback_updated:
             raise HTTPException(
@@ -313,12 +315,14 @@ def _archive_blob_path(blob_path: str, archive_folder_path: str, *,
 
 def finalize_processed_attachment(blob_path: str, document_id: int, results,
                                   page_count: int):
+    rotation_degrees = _mode_raw_detected_rotation(results)
     updated = db.update_attachment(
         blob_path,
         processed=True,
         raw_extracted_data=results,
         page_count=page_count,
         extracted_files_count=page_count,
+        rotation_degrees=rotation_degrees,
     )
     if not updated:
         raise HTTPException(500, "attachment finalization update failed")
@@ -330,12 +334,29 @@ def finalize_processed_attachment(blob_path: str, document_id: int, results,
         "processed": True,
         "page_count": page_count,
         "extracted_files_count": page_count,
+        "rotation_degrees": rotation_degrees,
     }
     attachment = db.get_attachment_by_path(blob_path)
     if attachment:
         result["attachment_id"] = attachment["id"]
     result["document_id"] = document_id
     return result
+
+
+def _mode_raw_detected_rotation(results) -> Optional[int]:
+    rotations = []
+    for result in results or []:
+        orientation = result.get("orientation") or {}
+        rotation = orientation.get("raw_detected_deg")
+        if rotation is None:
+            continue
+        try:
+            rotations.append(int(rotation))
+        except (TypeError, ValueError):
+            continue
+    if not rotations:
+        return None
+    return Counter(rotations).most_common(1)[0][0]
 
 
 def archive_for_processing(blob_path: str) -> dict:
