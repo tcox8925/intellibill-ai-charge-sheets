@@ -557,16 +557,17 @@ def get_document(document_id: int, conn=None) -> Optional[dict]:
                 cols = [d[0] for d in cur.description]
                 attachment = dict(zip(cols, row))
                 cur.execute(
-                    f"""SELECT COUNT(*)
+                    f"""SELECT COUNT(*), MIN(clm_att_path)
                           FROM {ATTACHMENTS_TABLE}
                          WHERE parent_attachment_id=%s""",
                     (document_id,))
-                child_page_count = cur.fetchone()[0]
+                child_page_count, first_child_path = cur.fetchone()
+                pages_blob_prefix = _pages_blob_prefix_for_path(
+                    first_child_path or attachment.get("clm_att_path"))
                 return {
                     "document_id": attachment["id"],
                     "source_blob_path": attachment.get("clm_att_path"),
-                    "pages_blob_prefix": _pages_blob_prefix_for_path(
-                        attachment.get("clm_att_path")),
+                    "pages_blob_prefix": pages_blob_prefix,
                     "file_name": attachment.get("clm_att_filename"),
                     "status": _attachment_status(
                         bool(attachment.get("processed")), child_page_count),

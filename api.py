@@ -164,8 +164,11 @@ def health_listattachments():
 @app.post("/chargesheet/extract")
 def extract_blob_sync(req: IngestRequest):
     blob_path = _resolve_ingest_target(req)
-    data = storage.download_blob(blob_path)
-    return _run_blob_ingest_sync(blob_path, data)
+    if is_processed(blob_path):
+        logger.info("Skipping already processed claim file: %s", blob_path)
+        return _build_skip_result(blob_path, "already_processed")
+
+    return _handle_extract_blob_sync(blob_path)
 
 @app.get("/chargesheet/folders")
 def folders():
@@ -377,11 +380,29 @@ def _mark_unsupported_processed(blob_path: str):
 
 def _handle_ingest_blob(blob_path: str, bg: BackgroundTasks) -> Optional[dict]:
     if storage.is_pdf_path(blob_path) or storage.is_image_path(blob_path):
+        original_blob_path = blob_path
         archive_result = archive_for_processing(blob_path)
-        return _queue_blob_ingest(archive_result["new_blob_path"], bg)
+        return _queue_blob_ingest(
+            bg,
+            archived_blob_path=archive_result["new_blob_path"],
+            original_blob_path=original_blob_path,
+        )
 
     _mark_unsupported_processed(blob_path)
     return None
+
+
+def _handle_extract_blob_sync(blob_path: str) -> Union[dict, IngestSkipResult]:
+    if storage.is_pdf_path(blob_path) or storage.is_image_path(blob_path):
+        original_blob_path = blob_path
+        archive_result = archive_for_processing(blob_path)
+        return _run_blob_ingest_sync(
+            archive_result["new_blob_path"],
+            original_blob_path=original_blob_path,
+        )
+
+    _mark_unsupported_processed(blob_path)
+    return _build_skip_result(blob_path, "unsupported_file_marked_processed")
 
 
 def _blob_folder(blob_path: str) -> str:
@@ -410,7 +431,9 @@ def _resolve_ingest_context(blob_path: str) -> dict:
     }
 
 
-def _run_blob_ingest_sync(blob_path: str, data: bytes, *, want=None) -> dict:
+def _run_blob_ingest_sync(blob_path: str, *,
+                          original_blob_path: Optional[str] = None,
+                          want=None) -> dict:
     if not (storage.is_pdf_path(blob_path) or storage.is_image_path(blob_path)):
         raise HTTPException(400, "blob_path must point to a PDF or supported image")
 
@@ -420,38 +443,51 @@ def _run_blob_ingest_sync(blob_path: str, data: bytes, *, want=None) -> dict:
         context["attachment_id"],
         context["stem"],
         blob_path,
-        data,
+        original_blob_path=original_blob_path or blob_path,
         want=want,
     )
 
 
-def _queue_blob_ingest(blob_path: str, bg: BackgroundTasks) -> dict:
-    context = _resolve_ingest_context(blob_path)
+def _queue_blob_ingest(archived_blob_path: str, bg: BackgroundTasks,
+                       *, original_blob_path: Optional[str] = None) -> dict:
+    context = _resolve_ingest_context(archived_blob_path)
+    original_blob_path = original_blob_path or archived_blob_path
 
     worker = _process if context["source_type"] == "pdf" else _process_image_blob
     logger.info("Queueing %s claim file for processing: %s",
-                context["source_type"], blob_path)
-    bg.add_task(worker, context["attachment_id"], context["stem"], blob_path)
+                context["source_type"], archived_blob_path)
+    bg.add_task(
+        worker,
+        context["attachment_id"],
+        context["stem"],
+        archived_blob_path,
+        original_blob_path=original_blob_path,
+    )
     return {
         "document_id": context["attachment_id"],
         "attachment_name": context["attachment_name"],
         "status": "queued",
         "folder": context["folder"],
-        "source_blob_path": f"{storage.CONTAINER}/{blob_path}",
-        "pages_blob_prefix": f"{storage.CONTAINER}/{storage.pages_prefix(blob_path)}",
+        "source_blob_path": f"{storage.CONTAINER}/{archived_blob_path}",
+        "pages_blob_prefix": (
+            f"{storage.CONTAINER}/{storage.pages_prefix(original_blob_path)}"
+        ),
         "source_type": context["source_type"],
     }
 
 
 def _process(attachment_id: int, stem: str,
-             blob_path: str, want=None):
+             blob_path: str, *, original_blob_path: Optional[str] = None,
+             want=None):
     """Background worker: split -> per-page extract -> upload page -> persist."""
     from PIL import Image
     registry = _registry()
     folder = _blob_folder(blob_path)
     document_id = attachment_id
+    archived_blob_path = blob_path
+    original_blob_path = original_blob_path or archived_blob_path
     try:
-        pdf_bytes = storage.download_blob(blob_path)
+        pdf_bytes = storage.download_blob(archived_blob_path)
         parent_attachment = db.get_attachment_by_id(document_id)
         if not parent_attachment:
             raise HTTPException(404, f"attachment not found: id={document_id}")
@@ -464,7 +500,7 @@ def _process(attachment_id: int, stem: str,
             def on_page(page_no, page_image_path, result):
                 # upload the rendered page, then persist page+children with paths
                 uploaded_blob_path = storage.upload_page(
-                    blob_path, page_no, Image.open(page_image_path))
+                    original_blob_path, page_no, Image.open(page_image_path))
                 result["template_match"] = result.get("template_match", {})
                 db.persist_page_v2(document_id, result,
                                    page_blob_path=uploaded_blob_path)
@@ -476,25 +512,28 @@ def _process(attachment_id: int, stem: str,
         tid = next((r.get("template_match", {}).get("template_id")
                     for r in results if r.get("template_match", {}).get("template_id")), None)
         _finalize_processed_blob(
-            document_id, blob_path, len(results), tid, metrics, results)
+            document_id, archived_blob_path, len(results), tid, metrics, results)
         return _build_processed_response(
-            document_id, attachment_name, folder, blob_path, "pdf", results,
-            metrics)
+            document_id, attachment_name, folder, archived_blob_path,
+            original_blob_path, "pdf", results, metrics)
     except Exception as e:
         _mark_processing_failed(document_id, e)
         raise
 
 
 def _process_image_blob(attachment_id: int, stem: str,
-                        blob_path: str, want=None):
+                        blob_path: str, *, original_blob_path: Optional[str] = None,
+                        want=None):
     """Background worker for single image blobs."""
     from PIL import Image
 
     registry = _registry()
     folder = _blob_folder(blob_path)
     document_id = attachment_id
+    archived_blob_path = blob_path
+    original_blob_path = original_blob_path or archived_blob_path
     try:
-        image_bytes = storage.download_blob(blob_path)
+        image_bytes = storage.download_blob(archived_blob_path)
         parent_attachment = db.get_attachment_by_id(document_id)
         if not parent_attachment:
             raise HTTPException(404, f"attachment not found: id={document_id}")
@@ -509,18 +548,19 @@ def _process_image_blob(attachment_id: int, stem: str,
                 image_path, client, tmp)
             payload = image_ocr.process_image(upright_png_path, client, registry)
             uploaded_blob_path = storage.upload_page(
-                blob_path, 1, Image.open(upright_png_path))
+                original_blob_path, 1, Image.open(upright_png_path))
 
         result = payload["pages"][0]
         db.persist_page_v2(document_id, result,
                            page_blob_path=uploaded_blob_path)
         tid = result.get("template_match", {}).get("template_id")
         _finalize_processed_blob(
-            document_id, blob_path, 1, tid, payload["metrics"],
+            document_id, archived_blob_path, 1, tid, payload["metrics"],
             payload["pages"])
         return _build_processed_response(
-            document_id, attachment_name, folder, blob_path, "image",
-            payload["pages"], payload["metrics"])
+            document_id, attachment_name, folder, archived_blob_path,
+            original_blob_path, "image", payload["pages"],
+            payload["metrics"])
     except Exception as e:
         _mark_processing_failed(document_id, e)
         raise
@@ -547,7 +587,8 @@ def _mark_processing_failed(document_id: int, error: Exception):
 
 
 def _build_processed_response(document_id: int, attachment_name: Optional[str],
-                              folder: str, blob_path: str, source_type: str,
+                              folder: str, blob_path: str,
+                              original_blob_path: str, source_type: str,
                               pages: list, metrics: dict) -> dict:
     return {
         "document_id": document_id,
@@ -555,7 +596,9 @@ def _build_processed_response(document_id: int, attachment_name: Optional[str],
         "status": "done",
         "folder": folder,
         "source_blob_path": f"{storage.CONTAINER}/{blob_path}",
-        "pages_blob_prefix": f"{storage.CONTAINER}/{storage.pages_prefix(blob_path)}",
+        "pages_blob_prefix": (
+            f"{storage.CONTAINER}/{storage.pages_prefix(original_blob_path)}"
+        ),
         "source_type": source_type,
         "page_count": len(pages),
         "pages": pages,
