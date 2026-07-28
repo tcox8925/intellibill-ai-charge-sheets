@@ -15,8 +15,10 @@ In-tenant you would swap the client for your Azure OpenAI/Anthropic deployment
 and keep KV/VNet auth exactly like pch-eob-pipeline.
 """
 
-import base64, io, json, os, re, time
+import base64, io, json, logging, os, re, time
 from PIL import Image
+
+logger = logging.getLogger("chargesheet.extract")
 
 # Mirror EOB v9 auth.py: Opus via AnthropicFoundry, model string from auth.
 # Falls back to a plain string if auth.py isn't importable (e.g. this sandbox).
@@ -30,7 +32,10 @@ try:
 except Exception:
     HAIKU_MODEL = os.environ.get("CHARGE_HAIKU", "claude-haiku-4-5")
 
-ROTATE_DEG = int(os.environ.get("CHARGE_ROTATE", "90"))  # scans are 90° off
+ROTATE_DEG = int(os.environ.get("CHARGE_ROTATE", "0"))  # manual override only;
+# run.py DETECTS orientation per page and normalizes each to upright before
+# extraction, so the default is 0. Set CHARGE_ROTATE to force a fixed rotation
+# (extract, mark_detect and build_catalog all honor the same env var).
 
 # EOB v9 transient-error patterns — retry these, fail fast on everything else.
 TRANSIENT_PATTERNS = [
@@ -38,6 +43,7 @@ TRANSIENT_PATTERNS = [
     "connection reset", "RemoteProtocolError", "complete message body",
     "server disconnected", "read timeout", "timed out", "overloaded",
 ]
+
 
 def _is_transient(err: Exception) -> bool:
     s = str(err).lower()
@@ -61,6 +67,7 @@ SYSTEM = (
     "The patient's own name is NOT a clinical note. When unsure whether a mark "
     "is deliberate, it is NOT a selection."
 )
+
 
 def build_user_prompt(catalog: dict) -> str:
     # Compact the catalog so the model sees code -> description per section.
@@ -143,6 +150,7 @@ def array_b64(arr) -> str:
 def catalog_code_set(catalog: dict) -> set:
     return {c["code"] for sec in catalog["sections"] for c in sec["cells"]}
 
+
 def validate(result: dict, catalog: dict) -> dict:
     valid = catalog_code_set(catalog)
     dropped = []
@@ -161,6 +169,7 @@ def validate(result: dict, catalog: dict) -> dict:
 
 
 CONFIRM_MIN = 0.75   # below this a mark isn't a confirmed selection
+
 
 def refine(result: dict) -> dict:
     """Precision net: keep circled_* to CONFIRMED deliberate marks only; push
@@ -202,35 +211,97 @@ def _parse_json(text: str) -> dict:
     text = re.sub(r"^```(json)?|```$", "", text.strip(), flags=re.MULTILINE).strip()
     return json.loads(text)
 
+
 IDENTIFY_SYSTEM = (
     "You look at a scanned medical form and list only the PRINTED section "
     "headers and a few printed billing codes you can see. Strict JSON, no prose."
 )
 
-def identify_page(path: str, client) -> tuple:
-    """Cheap Haiku pass: which printed section headers + codes are on this page?
-    Feeds the fingerprint so run.py can pick a known catalog or build a new one.
-    Mirrors EOB Stage-1 page classification (Haiku, not Opus)."""
-    img = load_page_b64(path)
+ORIENT_SYSTEM = (
+    "You determine the rotation of a scanned page. Strict JSON, no prose."
+)
+
+
+def clockwise_restoration_rotation(raw_clockwise_deg: int) -> int:
+    """Clockwise rotation needed to restore an image to upright."""
+    return (-int(raw_clockwise_deg)) % 360
+
+
+def detect_orientation(path: str, client) -> int:
+    """Cheap Haiku pass on the raw page. Returns `rotate_ccw` as 0/90/180/270,
+    defaulting to 0 on failure or invalid output."""
+    img = load_page_b64(path, rotate=0)   # RAW — do not pre-rotate
     prompt = (
-        'Return JSON only: {"seen_sections": ["..."], "seen_codes": ["..."]}.\n'
-        "seen_sections: the printed section-header titles on the form.\n"
-        "seen_codes: up to 15 printed billing codes you can read "
-        "(e.g. 99214, J1885, M54.5). Ignore all handwriting, circles, notes."
+        'Return JSON only: {"rotate_ccw": 0|90|180|270}.\n'
+        "rotate_ccw = degrees to rotate the image COUNTER-CLOCKWISE so the "
+        "printed text becomes upright and reads left-to-right (0 if already upright)."
     )
     try:
         msg = client.messages.create(
-            model=HAIKU_MODEL, max_tokens=800, system=IDENTIFY_SYSTEM,
+            model=HAIKU_MODEL, max_tokens=50, system=ORIENT_SYSTEM,
             messages=[{"role": "user", "content": [
                 {"type": "image", "source": {"type": "base64",
                  "media_type": "image/png", "data": img}},
                 {"type": "text", "text": prompt}]}],
         )
         text = "".join(b.text for b in msg.content if b.type == "text")
-        d = _parse_json(text)
-        return d.get("seen_sections") or [], d.get("seen_codes") or []
+        payload = _parse_json(text)
+        # logger.info("Orientation payload: %s", payload)
+        deg = int(payload.get("rotate_ccw", 0)) % 360
+        return deg if deg in (0, 90, 180, 270) else 0
     except Exception:
-        return [], []
+        # logger.exception("Orientation detection failed for %s", path)
+        return 0
+
+
+def identify_page(path: str, client, retries: int = 2) -> tuple:
+    """Cheap Haiku pass: which printed section headers + codes are on this page,
+    AND is this even a charge sheet? Returns
+        (seen_sections, seen_codes, is_chargesheet, confidence)
+    Feeds the fingerprint so run.py can pick a known catalog or build a new one,
+    and the recognition gate so non-charge-sheets are rejected, not force-fit.
+    Retries transient errors AND empty parses — a blank response here otherwise
+    looks like 'not a charge sheet' and a real sheet gets dropped.
+    Mirrors EOB Stage-1 page classification (Haiku, not Opus)."""
+    img = load_page_b64(path)
+    prompt = (
+        'Return JSON only: {"is_chargesheet": true|false, "confidence": 0.0, '
+        '"seen_sections": ["..."], "seen_codes": ["..."]}.\n'
+        "is_chargesheet: true ONLY if this page is a medical superbill / charge "
+        "sheet — a printed grid of billing codes (CPT/HCPCS/ICD-10) under section "
+        "headers, meant for marking services rendered. A cover page, fax banner, "
+        "insurance EOB/remittance, letter, or blank page is NOT a charge sheet.\n"
+        "confidence: 0.0-1.0 for the is_chargesheet judgment.\n"
+        "seen_sections: the printed section-header titles on the form.\n"
+        "seen_codes: up to 15 printed billing codes you can read "
+        "(e.g. 99214, J1885, M54.5). Ignore all handwriting, circles, notes."
+    )
+    for attempt in range(retries + 1):
+        try:
+            msg = client.messages.create(
+                model=HAIKU_MODEL, max_tokens=800, system=IDENTIFY_SYSTEM,
+                messages=[{"role": "user", "content": [
+                    {"type": "image", "source": {"type": "base64",
+                     "media_type": "image/png", "data": img}},
+                    {"type": "text", "text": prompt}]}],
+            )
+            text = "".join(b.text for b in msg.content if b.type == "text")
+            d = _parse_json(text)
+            secs = d.get("seen_sections") or []
+            codes = d.get("seen_codes") or []
+            is_cs = d.get("is_chargesheet")
+            conf = float(d.get("confidence") or 0.0)
+            # a wholly empty read is almost always a transient/parse blip — retry
+            if is_cs is None and not secs and not codes and attempt < retries:
+                time.sleep(2 ** attempt)
+                continue
+            return secs, codes, is_cs, conf
+        except Exception as e:
+            if attempt < retries:
+                if _is_transient(e):
+                    time.sleep(2 ** attempt)
+                continue
+    return [], [], None, 0.0
 
 
 DUAL_IMAGE_NOTE = (

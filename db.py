@@ -85,6 +85,7 @@ def update_attachment(clm_att_path: str, *, new_blob_path: Optional[str] = None,
                       raw_extracted_data: Optional[Any] = None,
                       page_count: Optional[int] = None,
                       extracted_files_count: Optional[int] = None,
+                      rotation_degrees: Optional[int] = None,
                       conn=None) -> bool:
     """Update selected attachment fields for the row identified by clm_att_path."""
     assignments = []
@@ -111,6 +112,9 @@ def update_attachment(clm_att_path: str, *, new_blob_path: Optional[str] = None,
     if extracted_files_count is not None:
         assignments.append("extracted_files_count=%s")
         params.append(extracted_files_count)
+    if rotation_degrees is not None:
+        assignments.append("rotation_degrees=%s")
+        params.append(rotation_degrees)
 
     if not assignments:
         return False
@@ -475,7 +479,7 @@ def persist_page_v2(document_id: int, page_result: dict, page_blob_path: str,
                     parent_attachment.get("practice_id"),
                     1,
                     1,
-                    270,
+                    0,
                     ATTACHMENT_USER_ID,
                     ATTACHMENT_STATUS,
                     json.dumps(page_result),
@@ -557,16 +561,17 @@ def get_document(document_id: int, conn=None) -> Optional[dict]:
                 cols = [d[0] for d in cur.description]
                 attachment = dict(zip(cols, row))
                 cur.execute(
-                    f"""SELECT COUNT(*)
+                    f"""SELECT COUNT(*), MIN(clm_att_path)
                           FROM {ATTACHMENTS_TABLE}
                          WHERE parent_attachment_id=%s""",
                     (document_id,))
-                child_page_count = cur.fetchone()[0]
+                child_page_count, first_child_path = cur.fetchone()
+                pages_blob_prefix = _pages_blob_prefix_for_path(
+                    first_child_path or attachment.get("clm_att_path"))
                 return {
                     "document_id": attachment["id"],
                     "source_blob_path": attachment.get("clm_att_path"),
-                    "pages_blob_prefix": _pages_blob_prefix_for_path(
-                        attachment.get("clm_att_path")),
+                    "pages_blob_prefix": pages_blob_prefix,
                     "file_name": attachment.get("clm_att_filename"),
                     "status": _attachment_status(
                         bool(attachment.get("processed")), child_page_count),
