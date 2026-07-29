@@ -17,6 +17,8 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, TypedDict
 from zoneinfo import ZoneInfo
 
+from psycopg2.extras import RealDictCursor
+
 from auth import get_kv_client, get_pg_connection, reconnect_if_stale
 
 SCHEMA = "wpo"
@@ -439,7 +441,7 @@ def persist_page_v2(document_id: int, page_result: dict, page_blob_path: str,
         att_datetime = _current_cst_timestamp()
         created_at = att_datetime
         updated_at = att_datetime
-        with conn.cursor() as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 f"""DELETE FROM {ATTACHMENTS_TABLE}
                      WHERE parent_attachment_id=%s
@@ -492,7 +494,9 @@ def persist_page_v2(document_id: int, page_result: dict, page_blob_path: str,
             row = cur.fetchone()
         if own:
             conn.commit()
-        return row[0]
+        if row is None:
+            raise ValueError("child attachment insert did not return an id")
+        return int(row["id"])
     finally:
         if own:
             conn.close()

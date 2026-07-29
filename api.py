@@ -14,6 +14,8 @@ Endpoints
     GET  /chargesheet/documents/{document_id}/pages   per-page results + extraction_ids
     POST /chargesheet/feedback                         the two review signals
     GET  /chargesheet/documents/{document_id}/feedback list feedback
+    POST /external/auth/login                         authenticate and return auth cookies
+    POST /external/claims/create-prof-claim           queue claim creation via tRPC
 
 Flow of POST /ingest (async):
     find source folder -> find newest .pdf -> download bytes -> register a
@@ -41,6 +43,7 @@ from pydantic import BaseModel, model_validator
 import auth
 import storage
 import db
+import external_apis
 import image_ocr
 import run
 
@@ -147,6 +150,18 @@ class FeedbackRequest(BaseModel):
         if self.feedback_type == "missed" and not self.code:
             raise ValueError("'missed' feedback requires code "
                              "(what was NOT identified)")
+        return self
+
+
+class ExternalClaimRequest(BaseModel):
+    attachment_id: int
+    run_async: bool = True
+    cookie_header: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _check(self):
+        if not self.cookie_header:
+            return self
         return self
 
 
@@ -477,6 +492,45 @@ def _run_blob_ingest_sync(blob_path: str, *,
     )
 
 
+def _start_external_claim_session() -> dict:
+    try:
+        session = external_apis.login()
+        session["login_successful"] = True
+        session["login_error"] = None
+        return session
+    except external_apis.ExternalApiError as exc:
+        logger.warning("External login failed: %s", exc)
+        return {
+            "cookie_header": None,
+            "user_id": None,
+            "login_successful": False,
+            "login_error": str(exc),
+        }
+
+
+def _queue_external_claim_for_child(child_attachment_id: int,
+                                    external_session: dict):
+    if not external_session.get("login_successful"):
+        return
+
+    cookie_header = external_session.get("cookie_header")
+    if not cookie_header:
+        return
+
+    try:
+        external_apis.queue_claim_creation(
+            cookie_header=cookie_header,
+            attachment_id=child_attachment_id,
+            run_async=True,
+        )
+    except external_apis.ExternalApiError as exc:
+        logger.warning(
+            "External claim creation failed for child attachment %s: %s",
+            child_attachment_id,
+            exc,
+        )
+
+
 def _queue_blob_ingest(archived_blob_path: str, bg: BackgroundTasks,
                        *, original_blob_path: Optional[str] = None) -> dict:
     context = _resolve_ingest_context(archived_blob_path)
@@ -516,6 +570,7 @@ def _process(attachment_id: int, stem: str,
     archived_blob_path = blob_path
     original_blob_path = original_blob_path or archived_blob_path
     try:
+        external_session = _start_external_claim_session()
         pdf_bytes = storage.download_blob(archived_blob_path)
         parent_attachment = db.get_attachment_by_id(document_id)
         if not parent_attachment:
@@ -531,8 +586,15 @@ def _process(attachment_id: int, stem: str,
                 uploaded_blob_path = storage.upload_page(
                     original_blob_path, page_no, Image.open(page_image_path))
                 result["template_match"] = result.get("template_match", {})
-                db.persist_page_v2(document_id, result,
-                                   page_blob_path=uploaded_blob_path)
+                child_attachment_id = db.persist_page_v2(
+                    document_id,
+                    result,
+                    page_blob_path=uploaded_blob_path,
+                )
+                _queue_external_claim_for_child(
+                    child_attachment_id,
+                    external_session,
+                )
 
             results, metrics = run.process_pdf(
                 pdf_path, _client(), registry,
@@ -562,6 +624,7 @@ def _process_image_blob(attachment_id: int, stem: str,
     archived_blob_path = blob_path
     original_blob_path = original_blob_path or archived_blob_path
     try:
+        external_session = _start_external_claim_session()
         image_bytes = storage.download_blob(archived_blob_path)
         parent_attachment = db.get_attachment_by_id(document_id)
         if not parent_attachment:
@@ -580,8 +643,15 @@ def _process_image_blob(attachment_id: int, stem: str,
                 original_blob_path, 1, Image.open(upright_png_path))
 
         result = payload["pages"][0]
-        db.persist_page_v2(document_id, result,
-                           page_blob_path=uploaded_blob_path)
+        child_attachment_id = db.persist_page_v2(
+            document_id,
+            result,
+            page_blob_path=uploaded_blob_path,
+        )
+        _queue_external_claim_for_child(
+            child_attachment_id,
+            external_session,
+        )
         tid = result.get("template_match", {}).get("template_id")
         _finalize_processed_blob(
             document_id, archived_blob_path, 1, tid, payload["metrics"],
@@ -678,3 +748,33 @@ def list_feedback(document_id: int):
         return {"document_id": document_id, "feedback": rows}
     finally:
         conn.close()
+
+
+@app.post("/external/auth/login")
+def external_login():
+    try:
+        session = external_apis.login()
+    except external_apis.ExternalApiError as exc:
+        raise HTTPException(502, str(exc)) from exc
+    return session
+
+
+@app.post("/external/claims/create-prof-claim")
+def external_create_prof_claim(req: ExternalClaimRequest):
+    try:
+        cookie_header = req.cookie_header
+        if not cookie_header:
+            session = external_apis.login()
+            cookie_header = session["cookie_header"]
+        payload = external_apis.queue_claim_creation(
+            cookie_header=cookie_header,
+            attachment_id=req.attachment_id,
+            run_async=req.run_async,
+        )
+    except external_apis.ExternalApiError as exc:
+        raise HTTPException(502, str(exc)) from exc
+    return {
+        "attachment_id": req.attachment_id,
+        "run_async": req.run_async,
+        "result": payload,
+    }
