@@ -570,7 +570,7 @@ def _process(attachment_id: int, stem: str,
     archived_blob_path = blob_path
     original_blob_path = original_blob_path or archived_blob_path
     try:
-        external_session = _start_external_claim_session()
+        # external_session = _start_external_claim_session()
         pdf_bytes = storage.download_blob(archived_blob_path)
         parent_attachment = db.get_attachment_by_id(document_id)
         if not parent_attachment:
@@ -591,10 +591,10 @@ def _process(attachment_id: int, stem: str,
                     result,
                     page_blob_path=uploaded_blob_path,
                 )
-                _queue_external_claim_for_child(
-                    child_attachment_id,
-                    external_session,
-                )
+                # _queue_external_claim_for_child(
+                #     child_attachment_id,
+                #     external_session,
+                # )
 
             results, metrics = run.process_pdf(
                 pdf_path, _client(), registry,
@@ -624,7 +624,7 @@ def _process_image_blob(attachment_id: int, stem: str,
     archived_blob_path = blob_path
     original_blob_path = original_blob_path or archived_blob_path
     try:
-        external_session = _start_external_claim_session()
+        # external_session = _start_external_claim_session()
         image_bytes = storage.download_blob(archived_blob_path)
         parent_attachment = db.get_attachment_by_id(document_id)
         if not parent_attachment:
@@ -648,10 +648,10 @@ def _process_image_blob(attachment_id: int, stem: str,
             result,
             page_blob_path=uploaded_blob_path,
         )
-        _queue_external_claim_for_child(
-            child_attachment_id,
-            external_session,
-        )
+        # _queue_external_claim_for_child(
+        #     child_attachment_id,
+        #     external_session,
+        # )
         tid = result.get("template_match", {}).get("template_id")
         _finalize_processed_blob(
             document_id, archived_blob_path, 1, tid, payload["metrics"],
