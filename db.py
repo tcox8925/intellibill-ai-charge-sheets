@@ -26,7 +26,6 @@ EDI_TEBRA_SCHEMA = '"EDI_Tebra"'
 ATTACHMENTS_TABLE = f"{EDI_TEBRA_SCHEMA}.attachments"
 ATTACHMENT_CLM_LOGIN = os.environ["ATTACHMENT_CLM_LOGIN"]
 ATTACHMENT_USER_ID = os.environ["ATTACHMENT_USER_ID"]
-ATTACHMENT_STATUS = "G"
 
 
 JSONDict = Dict[str, Any]
@@ -438,6 +437,12 @@ def persist_page_v2(document_id: int, page_result: dict, page_blob_path: str,
             page_result, page_blob_path)
         page_file_name = os.path.basename(page_blob_path)
         original_file_name = page_file_name.rsplit("_", 1)[-1]
+        flags = set(page_result.get("flags", []) or [])
+        attachment_status = (
+            "E"
+            if {"not_chargesheet", "skipped_no_extraction"}.issubset(flags)
+            else "G"
+        )
         att_datetime = _current_cst_timestamp()
         created_at = att_datetime
         updated_at = att_datetime
@@ -483,7 +488,7 @@ def persist_page_v2(document_id: int, page_result: dict, page_blob_path: str,
                     1,
                     0,
                     ATTACHMENT_USER_ID,
-                    ATTACHMENT_STATUS,
+                    attachment_status,
                     json.dumps(page_result),
                     json.dumps(processed_payload),
                     json.dumps(metadata_payload),
