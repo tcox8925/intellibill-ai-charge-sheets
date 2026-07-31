@@ -49,13 +49,13 @@ import run
 
 app = FastAPI(title="834 Charge-sheet OCR", version="1.0")
 
-# chargesheet_logger = logging.getLogger("chargesheet")
-# if not chargesheet_logger.handlers:
-#     handler = logging.StreamHandler()
-#     handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
-#     chargesheet_logger.addHandler(handler)
-# chargesheet_logger.setLevel(logging.INFO)
-# chargesheet_logger.propagate = False
+chargesheet_logger = logging.getLogger("chargesheet")
+if not chargesheet_logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+    chargesheet_logger.addHandler(handler)
+chargesheet_logger.setLevel(logging.INFO)
+chargesheet_logger.propagate = False
 
 logger = logging.getLogger("chargesheet.api")
 
@@ -108,6 +108,10 @@ class IngestRequest(BaseModel):
     # configured root or a full blob path.
     filename: Optional[str] = None
     blob_path: Optional[str] = None
+
+
+class IngestAllRequest(BaseModel):
+    include_archive: bool = False
 
 
 class IngestAllResult(BaseModel):
@@ -214,12 +218,25 @@ def ingest(req: IngestRequest, bg: BackgroundTasks) -> Union[Dict[str, object], 
 
 
 @app.post("/chargesheet/ingest-all")
-def ingest_all(bg: BackgroundTasks) -> IngestAllResult:
-    folder_payload = folders()
+def ingest_all(bg: BackgroundTasks,
+               req: IngestAllRequest = IngestAllRequest()) -> IngestAllResult:
     queued = []
     skipped = []
     missed_files = []
 
+    if req.include_archive:
+        for blob_path in storage.list_archive_claim_files():
+            _ingest_claim_file(
+                blob_path, _archive_entity_folder(blob_path), bg,
+                queued, skipped, missed_files)
+        return IngestAllResult(
+            queued=queued,
+            skipped=skipped,
+            missed_files=missed_files,
+            excluded_folders=[],
+        )
+
+    folder_payload = folders()
     for folder_name in folder_payload["folders"]:
         if folder_name in INGEST_ALL_EXCLUDE:
             skipped.append({"folder": folder_name, "reason": "excluded"})
@@ -234,29 +251,7 @@ def ingest_all(bg: BackgroundTasks) -> IngestAllResult:
             continue
 
         for blob_path in claim_files:
-            if is_processed(blob_path):
-                logger.info("Skipping already processed claim file: %s", blob_path)
-                skipped.append(_build_skip_result(
-                    blob_path, "already_processed", folder=folder_name))
-                continue
-
-            try:
-                queue_result = _handle_ingest_blob(blob_path, bg)
-            except HTTPException as exc:
-                if exc.status_code == 404 and str(exc.detail).startswith(
-                        "attachment not found for blob path:"):
-                    logger.warning("Missing attachment row for blob path: %s",
-                                   blob_path)
-                    missed_files.append(_build_skip_result(
-                        blob_path, "attachment_not_found", folder=folder_name))
-                    continue
-                raise
-            if queue_result is None:
-                skipped.append(_build_skip_result(
-                    blob_path,
-                    "unsupported_file_marked_processed", folder=folder_name))
-                continue
-            queued.append(queue_result)
+            _ingest_claim_file(blob_path, folder_name, bg, queued, skipped, missed_files)
 
     return IngestAllResult(
         queued=queued,
@@ -264,6 +259,37 @@ def ingest_all(bg: BackgroundTasks) -> IngestAllResult:
         missed_files=missed_files,
         excluded_folders=INGEST_ALL_EXCLUDE,
     )
+
+
+def _archive_entity_folder(blob_path: str) -> str:
+    """Archive/{entity}/Claims/{date}/file.ext -> {entity}"""
+    parts = blob_path.strip("/").split("/")
+    return parts[1] if len(parts) > 1 else "Archive"
+
+
+def _ingest_claim_file(blob_path: str, folder_name: str, bg: BackgroundTasks,
+                       queued: list, skipped: list, missed_files: list) -> None:
+    if is_processed(blob_path):
+        logger.info("Skipping already processed claim file: %s", blob_path)
+        skipped.append(_build_skip_result(
+            blob_path, "already_processed", folder=folder_name))
+        return
+
+    try:
+        queue_result = _handle_ingest_blob(blob_path, bg)
+    except HTTPException as exc:
+        if exc.status_code == 404 and str(exc.detail).startswith(
+                "attachment not found for blob path:"):
+            logger.warning("Missing attachment row for blob path: %s", blob_path)
+            missed_files.append(_build_skip_result(
+                blob_path, "attachment_not_found", folder=folder_name))
+            return
+        raise
+    if queue_result is None:
+        skipped.append(_build_skip_result(
+            blob_path, "unsupported_file_marked_processed", folder=folder_name))
+        return
+    queued.append(queue_result)
 
 
 def is_processed(blob_path: str) -> bool:
