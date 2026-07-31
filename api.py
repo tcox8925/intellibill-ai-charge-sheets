@@ -298,7 +298,7 @@ def is_processed(blob_path: str) -> bool:
 
 def construct_archive_folder_path(blob_path: str) -> str:
     path_parts = [part for part in blob_path.strip("/").split("/") if part]
-    entity_group = path_parts[0]
+    entity_group = path_parts[1] if path_parts[0] == "Archive" else path_parts[0]
     current_date = date.today().isoformat()
     return f"Archive/{entity_group}/Claims/{current_date}"
 
