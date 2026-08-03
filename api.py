@@ -9,6 +9,7 @@ Endpoints
     POST /chargesheet/extract                         process one blob path synchronously
     GET  /chargesheet/folders                         list container folders
     POST /chargesheet/ingest                          {filename?} -> document_id
+    POST /chargesheet/ingest-custom-list              {blob_paths[]} -> per-path results
     POST /chargesheet/ingest-all                      queue all supported claim files
     GET  /chargesheet/documents/{document_id}         status + metrics
     GET  /chargesheet/documents/{document_id}/pages   per-page results + extraction_ids
@@ -110,6 +111,10 @@ class IngestRequest(BaseModel):
     blob_path: Optional[str] = None
 
 
+class IngestCustomListRequest(BaseModel):
+    blob_paths: List[str]
+
+
 class IngestAllRequest(BaseModel):
     include_archive: bool = False
 
@@ -169,6 +174,12 @@ class ExternalClaimRequest(BaseModel):
         return self
 
 
+class ExternalClaimBatchRequest(BaseModel):
+    attachment_ids: List[int]
+    run_async: bool = True
+    cookie_header: Optional[str] = None
+
+
 # ---------- endpoints -------------------------------------------------------
 
 @app.get("/health")
@@ -215,6 +226,33 @@ def ingest(req: IngestRequest, bg: BackgroundTasks) -> Union[Dict[str, object], 
         return _build_skip_result(blob_path,
                                   "unsupported_file_marked_processed")
     return result
+
+
+@app.post("/chargesheet/ingest-custom-list")
+def ingest_custom_list(req: IngestCustomListRequest,
+                       bg: BackgroundTasks) -> List[Union[Dict[str, object], IngestSkipResult]]:
+    results = []
+    for blob_path in req.blob_paths:
+        blob_path = blob_path.strip()
+        if not blob_path:
+            results.append(_build_skip_result(blob_path, "blank_blob_path"))
+            continue
+
+        try:
+            if is_processed(blob_path):
+                logger.info("Skipping already processed claim file: %s", blob_path)
+                results.append(_build_skip_result(blob_path, "already_processed"))
+                continue
+
+            result = _handle_ingest_blob(blob_path, bg)
+            if result is None:
+                results.append(_build_skip_result(
+                    blob_path, "unsupported_file_marked_processed"))
+                continue
+            results.append(result)
+        except HTTPException as exc:
+            results.append(_build_skip_result(blob_path, f"error: {exc.detail}"))
+    return results
 
 
 @app.post("/chargesheet/ingest-all")
@@ -804,3 +842,35 @@ def external_create_prof_claim(req: ExternalClaimRequest):
         "run_async": req.run_async,
         "result": payload,
     }
+
+
+@app.post("/external/claims/create-prof-claim-batch")
+def external_create_prof_claim_batch(req: ExternalClaimBatchRequest) -> List[Dict[str, object]]:
+    cookie_header = req.cookie_header
+    if not cookie_header:
+        try:
+            session = external_apis.login()
+        except external_apis.ExternalApiError as exc:
+            raise HTTPException(502, str(exc)) from exc
+        cookie_header = session["cookie_header"]
+
+    results = []
+    for attachment_id in req.attachment_ids:
+        try:
+            payload = external_apis.queue_claim_creation(
+                cookie_header=cookie_header,
+                attachment_id=attachment_id,
+                run_async=req.run_async,
+            )
+            results.append({
+                "attachment_id": attachment_id,
+                "run_async": req.run_async,
+                "result": payload,
+            })
+        except external_apis.ExternalApiError as exc:
+            results.append({
+                "attachment_id": attachment_id,
+                "run_async": req.run_async,
+                "error": str(exc),
+            })
+    return results
