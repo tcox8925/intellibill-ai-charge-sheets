@@ -464,10 +464,10 @@ def persist_page_v2(document_id: int, page_result: dict, page_blob_path: str,
                          rotation_degrees,
                          user_id, status,
                          raw_extracted_data, processed_extracted_data,
-                         extraction_metadata, processed, sha)
+                         extraction_metadata, processed, sha, retrieval)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                         %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb,
-                        %s, %s)
+                        %s, %s, %s)
                     RETURNING id""",
                 (
                     None,
@@ -494,6 +494,7 @@ def persist_page_v2(document_id: int, page_result: dict, page_blob_path: str,
                     json.dumps(metadata_payload),
                     True,
                     None,
+                    "API",
                 ),
             )
             row = cur.fetchone()

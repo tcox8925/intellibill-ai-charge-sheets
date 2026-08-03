@@ -28,6 +28,7 @@ CREATE TABLE "EDI_Tebra".attachments (
     upload_source text NULL,
     associated_claim_dcn varchar(100) NULL,
     claim_creation_response jsonb NULL,
+    retrieval text NULL,
     CONSTRAINT claim_attachments_pkey PRIMARY KEY (id),
     CONSTRAINT attachments_assigned_to_id_fkey FOREIGN KEY (assigned_to_id) REFERENCES rcm.users(id),
     CONSTRAINT attachments_client_id_fkey FOREIGN KEY (client_id) REFERENCES "EDI_Tebra".client(client_id) ON DELETE CASCADE,
