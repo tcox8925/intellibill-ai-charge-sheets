@@ -443,8 +443,8 @@ def _resolve_ingest_target(req: IngestRequest) -> str:
 
 
 def _mark_unsupported_processed(blob_path: str):
-    db.update_attachment(blob_path, processed=True)
-    logger.info("Auto-marked unsupported claim file as processed: %s",
+    db.update_attachment(blob_path, processed=True, status="E")
+    logger.info("Auto-marked unsupported claim file as errored: %s",
                 blob_path)
 
 
