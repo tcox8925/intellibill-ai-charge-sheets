@@ -17,6 +17,8 @@ Endpoints
     GET  /chargesheet/documents/{document_id}/feedback list feedback
     POST /external/auth/login                         authenticate and return auth cookies
     POST /external/claims/create-prof-claim           queue claim creation via tRPC
+    POST /external/claims/create-prof-claim-batch     queue claims for a list of attachment_ids
+    POST /external/claims/create-prof-claim-all       sweep unclaimed 'G'-status children
 
 Flow of POST /ingest (async):
     find source folder -> find newest .pdf -> download bytes -> register a
@@ -178,6 +180,13 @@ class ExternalClaimBatchRequest(BaseModel):
     attachment_ids: List[int]
     run_async: bool = True
     cookie_header: Optional[str] = None
+    limit: Optional[int] = None
+
+
+class ExternalClaimAllRequest(BaseModel):
+    run_async: bool = True
+    cookie_header: Optional[str] = None
+    limit: Optional[int] = None
 
 
 # ---------- endpoints -------------------------------------------------------
@@ -562,7 +571,11 @@ def _start_external_claim_session() -> dict:
         session["login_successful"] = True
         session["login_error"] = None
         return session
-    except external_apis.ExternalApiError as exc:
+    except Exception as exc:
+        # Never let a login failure (auth error, network hiccup, timeout,
+        # anything) escape here — this runs inline in the per-page extraction
+        # loop, and an uncaught exception would abort the whole document's
+        # processing before the parent attachment gets finalized.
         logger.warning("External login failed: %s", exc)
         return {
             "cookie_header": None,
@@ -573,26 +586,56 @@ def _start_external_claim_session() -> dict:
 
 
 def _queue_external_claim_for_child(child_attachment_id: int,
-                                    external_session: dict):
-    if not external_session.get("login_successful"):
-        return
-
-    cookie_header = external_session.get("cookie_header")
-    if not cookie_header:
-        return
-
+                                    external_session: dict,
+                                    parent_attachment_id: int):
+    # This runs inline in the per-page extraction loop (on_page). Nothing in
+    # here — including the DB write recording the outcome — may ever raise,
+    # or it aborts the rest of the document's processing before the parent
+    # attachment gets finalized.
     try:
-        external_apis.queue_claim_creation(
-            cookie_header=cookie_header,
-            attachment_id=child_attachment_id,
-            run_async=True,
-        )
-    except external_apis.ExternalApiError as exc:
-        logger.warning(
-            "External claim creation failed for child attachment %s: %s",
+        if not external_session.get("login_successful"):
+            db.record_claim_creation_response(
+                child_attachment_id,
+                {"error": f"login failed: {external_session.get('login_error')}"},
+            )
+            return
+
+        cookie_header = external_session.get("cookie_header")
+        if not cookie_header:
+            db.record_claim_creation_response(
+                child_attachment_id, {"error": "login succeeded but no cookie_header"})
+            return
+
+        try:
+            payload = external_apis.queue_claim_creation(
+                cookie_header=cookie_header,
+                attachment_id=child_attachment_id,
+                run_async=True,
+            )
+            db.record_claim_creation_response(child_attachment_id, payload)
+        except Exception as exc:
+            logger.warning(
+                "External claim creation failed for child attachment %s: %s",
+                child_attachment_id,
+                exc,
+            )
+            db.record_claim_creation_response(child_attachment_id, {"error": str(exc)})
+    except Exception as exc:
+        logger.exception(
+            "Unexpected failure recording claim-creation outcome for child "
+            "attachment %s — continuing without aborting page processing",
             child_attachment_id,
-            exc,
         )
+        try:
+            db.record_claim_creation_response(
+                parent_attachment_id,
+                {"error": str(exc), "child_attachment_id": child_attachment_id},
+            )
+        except Exception:
+            logger.exception(
+                "Failed to record claim-creation error on parent attachment %s",
+                parent_attachment_id,
+            )
 
 
 def _queue_blob_ingest(archived_blob_path: str, bg: BackgroundTasks,
@@ -658,6 +701,7 @@ def _process(attachment_id: int, stem: str,
                 _queue_external_claim_for_child(
                     child_attachment_id,
                     external_session,
+                    document_id,
                 )
 
             results, metrics = run.process_pdf(
@@ -715,6 +759,7 @@ def _process_image_blob(attachment_id: int, stem: str,
         _queue_external_claim_for_child(
             child_attachment_id,
             external_session,
+            document_id,
         )
         tid = result.get("template_match", {}).get("template_id")
         _finalize_processed_blob(
@@ -844,33 +889,57 @@ def external_create_prof_claim(req: ExternalClaimRequest):
     }
 
 
-@app.post("/external/claims/create-prof-claim-batch")
-def external_create_prof_claim_batch(req: ExternalClaimBatchRequest) -> List[Dict[str, object]]:
-    cookie_header = req.cookie_header
-    if not cookie_header:
-        try:
-            session = external_apis.login()
-        except external_apis.ExternalApiError as exc:
-            raise HTTPException(502, str(exc)) from exc
-        cookie_header = session["cookie_header"]
+def _login_cookie_header(cookie_header: Optional[str]) -> str:
+    if cookie_header:
+        return cookie_header
+    try:
+        session = external_apis.login()
+    except external_apis.ExternalApiError as exc:
+        raise HTTPException(502, str(exc)) from exc
+    return session["cookie_header"]
 
+
+def _create_prof_claims_for_ids(attachment_ids: List[int], cookie_header: str,
+                                run_async: bool) -> List[Dict[str, object]]:
     results = []
-    for attachment_id in req.attachment_ids:
+    for attachment_id in attachment_ids:
         try:
             payload = external_apis.queue_claim_creation(
                 cookie_header=cookie_header,
                 attachment_id=attachment_id,
-                run_async=req.run_async,
+                run_async=run_async,
             )
+            db.record_claim_creation_response(attachment_id, payload)
             results.append({
                 "attachment_id": attachment_id,
-                "run_async": req.run_async,
+                "run_async": run_async,
                 "result": payload,
             })
         except external_apis.ExternalApiError as exc:
             results.append({
                 "attachment_id": attachment_id,
-                "run_async": req.run_async,
+                "run_async": run_async,
                 "error": str(exc),
             })
     return results
+
+
+@app.post("/external/claims/create-prof-claim-batch")
+def external_create_prof_claim_batch(req: ExternalClaimBatchRequest) -> List[Dict[str, object]]:
+    cookie_header = _login_cookie_header(req.cookie_header)
+    attachment_ids = req.attachment_ids
+    if req.limit is not None:
+        attachment_ids = attachment_ids[:req.limit]
+    return _create_prof_claims_for_ids(attachment_ids, cookie_header, req.run_async)
+
+
+@app.post("/external/claims/create-prof-claim-all")
+def external_create_prof_claim_all(
+        req: ExternalClaimAllRequest = ExternalClaimAllRequest()) -> List[Dict[str, object]]:
+    """Sweep every child attachment still in 'G' status with no claim queued
+    yet (claim_creation_response IS NULL) and queue claim creation for each."""
+    cookie_header = _login_cookie_header(req.cookie_header)
+    attachment_ids = db.list_unclaimed_g_status_child_ids()
+    if req.limit is not None:
+        attachment_ids = attachment_ids[:req.limit]
+    return _create_prof_claims_for_ids(attachment_ids, cookie_header, req.run_async)

@@ -142,6 +142,54 @@ def update_attachment(clm_att_path: str, *, new_blob_path: Optional[str] = None,
             conn.close()
 
 
+def list_unclaimed_g_status_child_ids(conn=None) -> list[int]:
+    """Child (page) attachments still in 'G' status with no successful claim
+    yet. A row whose claim_creation_response records an error is still
+    eligible — only a response without an 'error' key counts as claimed."""
+    own = conn is None
+    conn = conn or _conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""SELECT id
+                      FROM {ATTACHMENTS_TABLE}
+                     WHERE parent_attachment_id IS NOT NULL
+                       AND status = 'G'
+                       AND (claim_creation_response IS NULL
+                            OR claim_creation_response ? 'error')
+                     ORDER BY id"""
+            )
+            return [row[0] for row in cur.fetchall()]
+    finally:
+        if own:
+            conn.close()
+
+
+def record_claim_creation_response(attachment_id: int, response: Any,
+                                   conn=None) -> bool:
+    """Persist the claim-creation API response on a child attachment row,
+    so future create-prof-claim-all sweeps skip it."""
+    own = conn is None
+    conn = conn or _conn()
+    try:
+        updated_at = _current_cst_timestamp()
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""UPDATE {ATTACHMENTS_TABLE}
+                       SET claim_creation_response=%s::jsonb,
+                           updated_at=%s
+                     WHERE id=%s""",
+                (json.dumps(response), updated_at, attachment_id),
+            )
+            updated = cur.rowcount > 0
+        if own:
+            conn.commit()
+        return updated
+    finally:
+        if own:
+            conn.close()
+
+
 def list_attachment_entries(limit: int = 10, conn=None):
     """Return the first attachment rows as dictionaries."""
     own = conn is None
