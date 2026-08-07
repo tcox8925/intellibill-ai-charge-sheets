@@ -19,6 +19,7 @@ Endpoints
     POST /external/claims/create-prof-claim           queue claim creation via tRPC
     POST /external/claims/create-prof-claim-batch     queue claims for a list of attachment_ids
     POST /external/claims/create-prof-claim-all       sweep unclaimed 'G'-status children
+    POST /chargesheet/archive-processed               archive top-level processed, unarchived attachments
 
 Flow of POST /ingest (async):
     find source folder -> find newest .pdf -> download bytes -> register a
@@ -186,6 +187,11 @@ class ExternalClaimBatchRequest(BaseModel):
 class ExternalClaimAllRequest(BaseModel):
     run_async: bool = True
     cookie_header: Optional[str] = None
+    limit: Optional[int] = None
+
+
+class ArchiveProcessedRequest(BaseModel):
+    execute: bool = False
     limit: Optional[int] = None
 
 
@@ -943,3 +949,64 @@ def external_create_prof_claim_all(
     if req.limit is not None:
         attachment_ids = attachment_ids[:req.limit]
     return _create_prof_claims_for_ids(attachment_ids, cookie_header, req.run_async)
+
+
+@app.post("/chargesheet/archive-processed")
+def archive_processed_documents(
+        req: ArchiveProcessedRequest = ArchiveProcessedRequest()) -> Dict[str, object]:
+    """Archive top-level, processed attachments that aren't already archived:
+    rows with parent_attachment_id IS NULL, processed=true, and clm_att_path
+    not already under Archive/. Moves each blob and sets status='C', the same
+    way _archive_blob_path is used elsewhere. No claim is involved here.
+
+    Defaults to a dry run (execute=false) that only reports what would
+    happen; pass execute=true to actually archive."""
+    rows = db.list_unarchived_processed_parents()
+    candidates = [row for row in rows if row.get("clm_att_path")]
+    skipped_no_path = len(rows) - len(candidates)
+
+    limited = candidates[:req.limit] if req.limit is not None else candidates
+    planned = [
+        {"attachment_id": row["id"], "status": row.get("status"),
+         "blob_path": row["clm_att_path"]}
+        for row in limited
+    ]
+
+    if not req.execute:
+        return {
+            "dry_run": True,
+            "candidate_count": len(candidates),
+            "skipped_no_path": skipped_no_path,
+            "planned": planned,
+        }
+
+    results = []
+    for row in limited:
+        blob_path = row["clm_att_path"]
+        try:
+            archive_result = _archive_blob_path(
+                blob_path,
+                construct_archive_folder_path(blob_path),
+                status="C",
+                processed=True,
+            )
+            results.append({
+                "attachment_id": row["id"],
+                "status": "archived",
+                "old_blob_path": blob_path,
+                "new_blob_path": archive_result["new_blob_path"],
+            })
+        except Exception as exc:
+            results.append({
+                "attachment_id": row["id"],
+                "status": "error",
+                "blob_path": blob_path,
+                "error": str(exc),
+            })
+
+    return {
+        "dry_run": False,
+        "candidate_count": len(candidates),
+        "skipped_no_path": skipped_no_path,
+        "results": results,
+    }

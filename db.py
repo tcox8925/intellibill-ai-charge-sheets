@@ -190,6 +190,29 @@ def record_claim_creation_response(attachment_id: int, response: Any,
             conn.close()
 
 
+def list_unarchived_processed_parents(conn=None) -> list[dict]:
+    """Top-level (non-child) attachments that finished processing but whose
+    blob still isn't sitting under Archive/."""
+    own = conn is None
+    conn = conn or _conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""SELECT id, clm_att_path, clm_att_filename,
+                           original_file_name, status
+                      FROM {ATTACHMENTS_TABLE}
+                     WHERE parent_attachment_id IS NULL
+                       AND processed = true
+                       AND clm_att_path NOT ILIKE 'archive/%'
+                     ORDER BY id"""
+            )
+            cols = [desc[0] for desc in cur.description]
+            return [dict(zip(cols, row)) for row in cur.fetchall()]
+    finally:
+        if own:
+            conn.close()
+
+
 def list_attachment_entries(limit: int = 10, conn=None):
     """Return the first attachment rows as dictionaries."""
     own = conn is None
