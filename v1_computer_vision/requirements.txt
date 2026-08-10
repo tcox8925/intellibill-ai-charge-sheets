@@ -1,0 +1,6 @@
+anthropic>=0.64,<1
+azure-identity>=1.17,<2
+azure-keyvault-secrets>=4.8,<5
+Pillow>=10,<13
+numpy>=1.26,<3
+opencv-python-headless>=4.9,<5
