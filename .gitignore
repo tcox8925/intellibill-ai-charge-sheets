@@ -1,3 +1,4 @@
 .env
 __pycache__/
 .venv/
+v1_computer_vision/runtime/header_cache/*.json

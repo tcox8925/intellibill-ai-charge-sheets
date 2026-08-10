@@ -1,7 +1,11 @@
 """
 api.py — FastAPI service for the charge-sheet pipeline (kept SEPARATE from the
-run.py CLI). It wires the shared extraction core (run.process_pdf) to blob
-storage (storage.py) and Postgres (db.py).
+run.py CLI). It wires the extraction core to blob storage (storage.py) and
+Postgres (db.py). PDF billing-code selection goes through the locked-template
+computer-vision pipeline (v1_computer_vision.pipeline_adapter.process_pdf,
+same call shape as run.process_pdf) rather than the LLM; single-image blobs
+still go through the older LLM-based path (run.py / image_ocr.py), since the
+CV pipeline has no single-image entry point yet.
 
 Endpoints
     GET  /health                                      simple service health check
@@ -50,6 +54,7 @@ import db
 import external_apis
 import image_ocr
 import run
+from v1_computer_vision import pipeline_adapter as cv_pipeline
 
 app = FastAPI(title="834 Charge-sheet OCR", version="1.0")
 
@@ -691,7 +696,12 @@ def _queue_blob_ingest(archived_blob_path: str, bg: BackgroundTasks,
 def _process(attachment_id: int, stem: str,
              blob_path: str, *, original_blob_path: Optional[str] = None,
              want=None):
-    """Background worker: split -> per-page extract -> upload page -> persist."""
+    """Background worker: split -> per-page extract -> upload page -> persist.
+
+    Code selection uses the locked-template computer-vision pipeline
+    (v1_computer_vision.pipeline_adapter), not the LLM, per the swap to
+    deterministic geometric detection. registry is accepted for call-shape
+    compatibility but unused by that pipeline (single locked template)."""
     from PIL import Image
     registry = _registry()
     folder = _blob_folder(blob_path)
@@ -726,7 +736,7 @@ def _process(attachment_id: int, stem: str,
                     document_id,
                 )
 
-            results, metrics = run.process_pdf(
+            results, metrics = cv_pipeline.process_pdf(
                 pdf_path, _client(), registry,
                 pages_dir=os.path.join(tmp, "pages"), want=want, on_page=on_page)
 

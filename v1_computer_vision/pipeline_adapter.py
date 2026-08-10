@@ -17,12 +17,15 @@ from __future__ import annotations
 import datetime
 import importlib.util
 import json
+import logging
 import os
 import sys
 from pathlib import Path
 
 import cv2
 import numpy as np
+
+logger = logging.getLogger("chargesheet.v1_computer_vision")
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _PARENT = os.path.dirname(_HERE)
@@ -257,6 +260,8 @@ def process_pdf(pdf_path: str, client=None, registry=None, *, pages_dir: str = "
 
     pdf_bytes = Path(pdf_path).read_bytes()
     pages = render_pdf(pdf_bytes, s.render_dpi, wanted=set(want) if want else None)
+    logger.info("CV pipeline: %s -> %d page(s) to process (template=%s)",
+                os.path.basename(pdf_path), len(pages), s.template_id)
 
     need_header_notes = s.enable_header_notes
     active_client = client if client is not None else (_make_client() if need_header_notes else None)
@@ -273,6 +278,10 @@ def process_pdf(pdf_path: str, client=None, registry=None, *, pages_dir: str = "
 
         if not template.is_match(alignment):
             result = _mismatch_result(rp.page_number, alignment, template)
+            logger.info(
+                "page %2d: [mismatch] match=%.3f — skipped (locked_template_mismatch)",
+                rp.page_number, alignment.match_score,
+            )
         else:
             if not need_header_notes:
                 header_notes = {"header": {}, "notes": [], "flags": ["header_notes_disabled"]}
@@ -292,10 +301,27 @@ def process_pdf(pdf_path: str, client=None, registry=None, *, pages_dir: str = "
                     header_source = "model"
             result = _matched_result(rp.page_number, rp.sha256, alignment, template,
                                      manifest, header_notes, header_source)
+            header = result.get("header") or {}
+            logger.info(
+                "page %2d: %-28s [locked] proc=%d dx=%d notes=%d match=%.3f "
+                "header=%s flags=%s",
+                rp.page_number, header.get("name", "?"),
+                len(result.get("circled_procedures", [])),
+                len(result.get("circled_diagnoses", [])),
+                len(result.get("notes", [])),
+                alignment.match_score, header_source, result.get("flags", []),
+            )
 
         results.append(result)
         if on_page:
             on_page(rp.page_number, page_image_path, result)
 
     metrics = build_metrics(pdf_path, results)
+    logger.info(
+        "CV pipeline done: %s -> %d page(s), %d extracted, %d not-chargesheet, "
+        "%d procedures, %d diagnoses, %d notes",
+        os.path.basename(pdf_path), metrics["pages_processed"], metrics["pages_extracted"],
+        metrics["pages_not_chargesheet"], metrics["total_procedures"],
+        metrics["total_diagnoses"], metrics["total_notes"],
+    )
     return results, metrics
