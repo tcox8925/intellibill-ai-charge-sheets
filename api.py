@@ -197,6 +197,7 @@ class ArchiveProcessedRequest(BaseModel):
 
 # ---------- endpoints -------------------------------------------------------
 
+# curl -s http://localhost:8100/health | jq
 @app.get("/health")
 def health():
     db_status = auth.check_db_connection()
@@ -210,11 +211,15 @@ def health():
     }
 
 
+# curl -s http://localhost:8100/health/listattachments | jq
 @app.get("/health/listattachments")
 def health_listattachments():
     return {"attachments": db.list_attachment_entries()}
 
 
+# curl -s -X POST http://localhost:8100/chargesheet/extract \
+#   -H 'content-type: application/json' \
+#   -d '{"blob_path": "Folder/SomeFile.pdf"}' | jq
 @app.post("/chargesheet/extract")
 def extract_blob_sync(req: IngestRequest):
     blob_path = _resolve_ingest_target(req)
@@ -224,11 +229,15 @@ def extract_blob_sync(req: IngestRequest):
 
     return _handle_extract_blob_sync(blob_path)
 
+# curl -s http://localhost:8100/chargesheet/folders | jq
 @app.get("/chargesheet/folders")
 def folders():
     return {"container": storage.CONTAINER, "folders": storage.list_folders()}
 
 
+# curl -s -X POST http://localhost:8100/chargesheet/ingest \
+#   -H 'content-type: application/json' \
+#   -d '{"blob_path": "Folder/SomeFile.pdf"}' | jq
 @app.post("/chargesheet/ingest")
 def ingest(req: IngestRequest, bg: BackgroundTasks) -> Union[Dict[str, object], IngestSkipResult]:
     blob_path = _resolve_ingest_target(req)
@@ -243,6 +252,9 @@ def ingest(req: IngestRequest, bg: BackgroundTasks) -> Union[Dict[str, object], 
     return result
 
 
+# curl -s -X POST http://localhost:8100/chargesheet/ingest-custom-list \
+#   -H 'content-type: application/json' \
+#   -d '{"blob_paths": ["Folder/a.pdf", "Folder/b.pdf"]}' | jq
 @app.post("/chargesheet/ingest-custom-list")
 def ingest_custom_list(req: IngestCustomListRequest,
                        bg: BackgroundTasks) -> List[Union[Dict[str, object], IngestSkipResult]]:
@@ -270,6 +282,10 @@ def ingest_custom_list(req: IngestCustomListRequest,
     return results
 
 
+# curl -s -X POST http://localhost:8100/chargesheet/ingest-all | jq
+# curl -s -X POST http://localhost:8100/chargesheet/ingest-all \
+#   -H 'content-type: application/json' \
+#   -d '{"include_archive": true}' | jq
 @app.post("/chargesheet/ingest-all")
 def ingest_all(bg: BackgroundTasks,
                req: IngestAllRequest = IngestAllRequest()) -> IngestAllResult:
@@ -820,6 +836,7 @@ def _build_processed_response(document_id: int, attachment_name: Optional[str],
     }
 
 
+# curl -s http://localhost:8100/chargesheet/documents/123 | jq
 @app.get("/chargesheet/documents/{document_id}")
 def document(document_id: int):
     doc = db.get_document(document_id)
@@ -828,6 +845,7 @@ def document(document_id: int):
     return doc
 
 
+# curl -s http://localhost:8100/chargesheet/documents/123/pages | jq
 @app.get("/chargesheet/documents/{document_id}/pages")
 def document_pages(document_id: int):
     if not db.get_document(document_id):
@@ -835,6 +853,9 @@ def document_pages(document_id: int):
     return {"document_id": document_id, "pages": db.get_page_results(document_id)}
 
 
+# curl -s -X POST http://localhost:8100/chargesheet/feedback \
+#   -H 'content-type: application/json' \
+#   -d '{"document_id": 123, "page_number": 1, "feedback_type": "missed", "code": "99213"}' | jq
 @app.post("/chargesheet/feedback")
 def feedback(req: FeedbackRequest):
     fid = db.record_feedback(
@@ -846,6 +867,7 @@ def feedback(req: FeedbackRequest):
     return {"feedback_id": fid, "feedback_type": req.feedback_type}
 
 
+# curl -s http://localhost:8100/chargesheet/documents/123/feedback | jq
 @app.get("/chargesheet/documents/{document_id}/feedback")
 def list_feedback(document_id: int):
     conn = db._conn()
@@ -865,6 +887,7 @@ def list_feedback(document_id: int):
         conn.close()
 
 
+# curl -s -X POST http://localhost:8100/external/auth/login | jq
 @app.post("/external/auth/login")
 def external_login():
     try:
@@ -874,6 +897,9 @@ def external_login():
     return session
 
 
+# curl -s -X POST http://localhost:8100/external/claims/create-prof-claim \
+#   -H 'content-type: application/json' \
+#   -d '{"attachment_id": 123, "run_async": true}' | jq
 @app.post("/external/claims/create-prof-claim")
 def external_create_prof_claim(req: ExternalClaimRequest):
     try:
@@ -930,6 +956,9 @@ def _create_prof_claims_for_ids(attachment_ids: List[int], cookie_header: str,
     return results
 
 
+# curl -s -X POST http://localhost:8100/external/claims/create-prof-claim-batch \
+#   -H 'content-type: application/json' \
+#   -d '{"attachment_ids": [123, 124, 125], "run_async": true, "limit": 20}' | jq
 @app.post("/external/claims/create-prof-claim-batch")
 def external_create_prof_claim_batch(req: ExternalClaimBatchRequest) -> List[Dict[str, object]]:
     cookie_header = _login_cookie_header(req.cookie_header)
@@ -939,6 +968,9 @@ def external_create_prof_claim_batch(req: ExternalClaimBatchRequest) -> List[Dic
     return _create_prof_claims_for_ids(attachment_ids, cookie_header, req.run_async)
 
 
+# curl -s -X POST http://localhost:8100/external/claims/create-prof-claim-all \
+#   -H 'content-type: application/json' \
+#   -d '{"run_async": true, "limit": 20}' | jq
 @app.post("/external/claims/create-prof-claim-all")
 def external_create_prof_claim_all(
         req: ExternalClaimAllRequest = ExternalClaimAllRequest()) -> List[Dict[str, object]]:
@@ -951,6 +983,12 @@ def external_create_prof_claim_all(
     return _create_prof_claims_for_ids(attachment_ids, cookie_header, req.run_async)
 
 
+# curl -s -X POST http://localhost:8100/chargesheet/archive-processed \
+#   -H 'content-type: application/json' \
+#   -d '{}' | jq
+# curl -s -X POST http://localhost:8100/chargesheet/archive-processed \
+#   -H 'content-type: application/json' \
+#   -d '{"execute": true, "limit": 50}' | jq
 @app.post("/chargesheet/archive-processed")
 def archive_processed_documents(
         req: ArchiveProcessedRequest = ArchiveProcessedRequest()) -> Dict[str, object]:

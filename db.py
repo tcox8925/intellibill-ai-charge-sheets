@@ -20,6 +20,7 @@ from zoneinfo import ZoneInfo
 from psycopg2.extras import RealDictCursor
 
 from auth import get_kv_client, get_pg_connection, reconnect_if_stale
+from extraction_flags import ERRORED_CHILD_FLAGS
 
 SCHEMA = "wpo"
 EDI_TEBRA_SCHEMA = '"EDI_Tebra"'
@@ -511,7 +512,7 @@ def persist_page_v2(document_id: int, page_result: dict, page_blob_path: str,
         flags = set(page_result.get("flags", []) or [])
         attachment_status = (
             "E"
-            if {"not_chargesheet", "skipped_no_extraction"}.issubset(flags)
+            if ERRORED_CHILD_FLAGS.issubset(flags)
             else "G"
         )
         att_datetime = _current_cst_timestamp()

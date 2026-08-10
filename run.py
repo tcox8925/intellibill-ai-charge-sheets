@@ -25,6 +25,9 @@ from extract import (extract_page, identify_page, load_page_b64, array_b64,
 from fingerprint import STRONG, score, _norm
 from build_catalog import build_catalog
 from pdf_raster import render_pdf_pages
+from extraction_flags import (FLAG_NOT_CHARGESHEET, FLAG_SKIPPED_NO_EXTRACTION,
+                              FLAG_BLANK_HEADER, FLAG_RECOGNITION_FAILED,
+                              FLAG_TEMPLATE_MISMATCH, TEMPLATE_STATE_NOT_CHARGESHEET)
 
 # Raster resolution is FIXED, not configurable: 200 DPI for page extraction
 # (a letter page lands ~2200px, matching extract.py's max_px cap) and 300 DPI
@@ -225,11 +228,11 @@ def process_pdf(pdf_path: str, client, registry, *, pages_dir: str = "pages",
                     "seen_sections": seen_labels,
                     "seen_codes_sample": (seen_codes or [])[:8],
                 },
-                "flags": ["not_chargesheet", "skipped_no_extraction"],
-                "template_match": {"state": "not_chargesheet", "score": round(sc, 2)},
+                "flags": [FLAG_NOT_CHARGESHEET, FLAG_SKIPPED_NO_EXTRACTION, FLAG_BLANK_HEADER],
+                "template_match": {"state": TEMPLATE_STATE_NOT_CHARGESHEET, "score": round(sc, 2)},
             }
             if recognition_failed:
-                rej["flags"].append("recognition_failed")
+                rej["flags"].append(FLAG_RECOGNITION_FAILED)
             results.append(rej)
             if on_page:
                 on_page(i, path, rej)
@@ -282,14 +285,14 @@ def process_pdf(pdf_path: str, client, registry, *, pages_dir: str = "pages",
         if failopen:
             r.setdefault("flags", []).append("recognition_failed_failopen")
         if r.get("template_ok") is False:
-            r.setdefault("flags", []).append("template_mismatch")
+            r.setdefault("flags", []).append(FLAG_TEMPLATE_MISMATCH)
 
         h = r.get("header", {})
         for flag in check_dates(h):
             r.setdefault("flags", []).append(flag)
         ident = (h.get("name", "").strip().lower(), h.get("dob", "").strip())
         if not any(ident):
-            r.setdefault("flags", []).append("blank_header")
+            r.setdefault("flags", []).append(FLAG_BLANK_HEADER)
         elif ident in seen_identity:
             r.setdefault("flags", []).append(f"duplicate_of_page_{seen_identity[ident]}")
         else:
@@ -391,7 +394,7 @@ def build_metrics(pdf_path: str, results: list) -> dict:
     def _state(result):
         return result.get("template_match", {}).get("state")
 
-    not_cs = sum(1 for r in results if _state(r) == "not_chargesheet")
+    not_cs = sum(1 for r in results if _state(r) == TEMPLATE_STATE_NOT_CHARGESHEET)
     extracted = sum(1 for r in results
                     if _state(r) in ("known", "autobuilt") and "_error" not in r)
     metrics = {
