@@ -67,4 +67,6 @@ def load_manifest_and_catalog() -> tuple[dict, dict, Path]:
 @lru_cache(maxsize=1)
 def locked_template() -> LockedTemplate:
     _, catalog, reference_path = load_manifest_and_catalog()
-    return LockedTemplate(catalog=catalog, reference_path=str(reference_path))
+    s = get_settings()
+    thresholds = {"match_min": s.match_min_override} if s.match_min_override is not None else None
+    return LockedTemplate(catalog=catalog, reference_path=str(reference_path), thresholds=thresholds)

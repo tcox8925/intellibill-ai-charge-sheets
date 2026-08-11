@@ -17,6 +17,11 @@ def _int(name: str, default: int) -> int:
     return int(os.getenv(name, str(default)))
 
 
+def _optional_float(name: str) -> float | None:
+    value = os.getenv(name)
+    return float(value) if value not in (None, "") else None
+
+
 @dataclass(frozen=True)
 class Settings:
     template_id: str
@@ -30,6 +35,7 @@ class Settings:
     key_vault_url: str
     anthropic_key_secret: str
     anthropic_foundry_endpoint: str
+    match_min_override: float | None
 
 
 @lru_cache(maxsize=1)
@@ -56,4 +62,5 @@ def get_settings() -> Settings:
         key_vault_url=os.getenv("AZURE_KEY_VAULT_URL", "").strip(),
         anthropic_key_secret=os.getenv("ANTHROPIC_KEY_SECRET", "834-claude-key").strip(),
         anthropic_foundry_endpoint=os.getenv("ANTHROPIC_FOUNDRY_ENDPOINT", "").strip(),
+        match_min_override=_optional_float("CHARGESHEET_MATCH_MIN"),
     )
