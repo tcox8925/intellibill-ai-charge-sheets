@@ -1,0 +1,18 @@
+# Never bake secrets into the image — Azure App Service supplies these as
+# real environment variables/App Settings instead.
+.env
+
+.git
+.venv
+__pycache__
+*.pyc
+.DS_Store
+
+# Large local scratch/demo artifacts, not needed at runtime.
+pages/
+pages.zip
+results.json
+run_metrics_*.json
+chargesheet_documentation.docx
+
+v1_computer_vision/runtime/header_cache/*.json
