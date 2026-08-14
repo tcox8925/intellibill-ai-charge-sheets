@@ -403,6 +403,10 @@ def _archive_blob_path(blob_path: str, archive_folder_path: str, *,
     try:
         storage.move_blob(blob_path, target_blob_path)
     except Exception as exc:
+        logger.exception(
+            "storage.move_blob failed for %s -> %s; rolling back attachment update",
+            blob_path, target_blob_path,
+        )
         rollback_updated = db.update_attachment(
             target_blob_path,
             new_blob_path=blob_path,
