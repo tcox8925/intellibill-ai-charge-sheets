@@ -16,3 +16,4 @@ run_metrics_*.json
 chargesheet_documentation.docx
 
 v1_computer_vision/runtime/header_cache/*.json
+v2_computer_vision/runtime/header_cache/*.json

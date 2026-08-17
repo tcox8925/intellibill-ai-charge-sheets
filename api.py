@@ -2,10 +2,10 @@
 api.py — FastAPI service for the charge-sheet pipeline (kept SEPARATE from the
 run.py CLI). It wires the extraction core to blob storage (storage.py) and
 Postgres (db.py). PDF billing-code selection goes through the locked-template
-computer-vision pipeline (v1_computer_vision.pipeline_adapter.process_pdf,
-same call shape as run.process_pdf) rather than the LLM; single-image blobs
-still go through the older LLM-based path (run.py / image_ocr.py), since the
-CV pipeline has no single-image entry point yet.
+computer-vision pipeline (v2_computer_vision.pipeline_adapter.process_pdf,
+same call shape as run.process_pdf) rather than the LLM. Single-image blobs
+are no longer supported (neither CV pipeline has a single-image entry point)
+and are rejected with a 400 at ingest time instead of being processed.
 
 Endpoints
     GET  /health                                      simple service health check
@@ -54,7 +54,7 @@ import db
 import external_apis
 import image_ocr
 import run
-from v1_computer_vision import pipeline_adapter as cv_pipeline
+from v2_computer_vision import pipeline_adapter as cv_pipeline
 
 app = FastAPI(title="834 Charge-sheet OCR", version="1.0")
 
@@ -526,8 +526,23 @@ def _mark_unsupported_processed(blob_path: str):
                 blob_path)
 
 
+def _reject_single_image(blob_path: str):
+    # Single-image ingestion is no longer supported: neither CV pipeline
+    # (v1_computer_vision/v2_computer_vision) has a single-image entry point,
+    # only process_pdf(). Rather than silently mark these processed like a
+    # genuinely unsupported file type, fail loudly so a caller/integration
+    # still sending image blobs notices immediately.
+    if storage.is_image_path(blob_path):
+        raise HTTPException(
+            400,
+            f"single-image ingestion is no longer supported (blob_path={blob_path}); "
+            "only PDF blobs can be ingested",
+        )
+
+
 def _handle_ingest_blob(blob_path: str, bg: BackgroundTasks) -> Optional[dict]:
-    if storage.is_pdf_path(blob_path) or storage.is_image_path(blob_path):
+    _reject_single_image(blob_path)
+    if storage.is_pdf_path(blob_path):
         original_blob_path = blob_path
         archive_result = archive_for_processing(blob_path)
         return _queue_blob_ingest(
@@ -541,7 +556,8 @@ def _handle_ingest_blob(blob_path: str, bg: BackgroundTasks) -> Optional[dict]:
 
 
 def _handle_extract_blob_sync(blob_path: str) -> Union[dict, IngestSkipResult]:
-    if storage.is_pdf_path(blob_path) or storage.is_image_path(blob_path):
+    _reject_single_image(blob_path)
+    if storage.is_pdf_path(blob_path):
         original_blob_path = blob_path
         archive_result = archive_for_processing(blob_path)
         return _run_blob_ingest_sync(
@@ -582,12 +598,12 @@ def _resolve_ingest_context(blob_path: str) -> dict:
 def _run_blob_ingest_sync(blob_path: str, *,
                           original_blob_path: Optional[str] = None,
                           want=None) -> dict:
-    if not (storage.is_pdf_path(blob_path) or storage.is_image_path(blob_path)):
-        raise HTTPException(400, "blob_path must point to a PDF or supported image")
+    _reject_single_image(blob_path)
+    if not storage.is_pdf_path(blob_path):
+        raise HTTPException(400, "blob_path must point to a PDF")
 
     context = _resolve_ingest_context(blob_path)
-    worker = _process if context["source_type"] == "pdf" else _process_image_blob
-    return worker(
+    return _process(
         context["attachment_id"],
         context["stem"],
         blob_path,
@@ -674,11 +690,13 @@ def _queue_blob_ingest(archived_blob_path: str, bg: BackgroundTasks,
     context = _resolve_ingest_context(archived_blob_path)
     original_blob_path = original_blob_path or archived_blob_path
 
-    worker = _process if context["source_type"] == "pdf" else _process_image_blob
-    logger.info("Queueing %s claim file for processing: %s",
-                context["source_type"], archived_blob_path)
+    logger.info(
+        "Queueing %s claim file for processing: archived=%s original=%s "
+        "(pages upload alongside original_blob_path, not archived_blob_path)",
+        context["source_type"], archived_blob_path, original_blob_path,
+    )
     bg.add_task(
-        worker,
+        _process,
         context["attachment_id"],
         context["stem"],
         archived_blob_path,
@@ -703,7 +721,7 @@ def _process(attachment_id: int, stem: str,
     """Background worker: split -> per-page extract -> upload page -> persist.
 
     Code selection uses the locked-template computer-vision pipeline
-    (v1_computer_vision.pipeline_adapter), not the LLM, per the swap to
+    (v2_computer_vision.pipeline_adapter), not the LLM, per the swap to
     deterministic geometric detection. registry is accepted for call-shape
     compatibility but unused by that pipeline (single locked template)."""
     from PIL import Image
@@ -756,58 +774,19 @@ def _process(attachment_id: int, stem: str,
         raise
 
 
-def _process_image_blob(attachment_id: int, stem: str,
-                        blob_path: str, *, original_blob_path: Optional[str] = None,
-                        want=None):
-    """Background worker for single image blobs."""
-    from PIL import Image
-
-    registry = _registry()
-    folder = _blob_folder(blob_path)
-    document_id = attachment_id
-    archived_blob_path = blob_path
-    original_blob_path = original_blob_path or archived_blob_path
-    try:
-        external_session = _start_external_claim_session()
-        image_bytes = storage.download_blob(archived_blob_path)
-        parent_attachment = db.get_attachment_by_id(document_id)
-        if not parent_attachment:
-            raise HTTPException(404, f"attachment not found: id={document_id}")
-        attachment_name = parent_attachment.get("clm_att_filename")
-        with tempfile.TemporaryDirectory() as tmp:
-            image_path = os.path.join(tmp, os.path.basename(blob_path))
-            with open(image_path, "wb") as file_obj:
-                file_obj.write(image_bytes)
-
-            client = _client()
-            upright_png_path, _, _ = image_ocr.prepare_image_for_ocr(
-                image_path, client, tmp)
-            payload = image_ocr.process_image(upright_png_path, client, registry)
-            uploaded_blob_path = storage.upload_page(
-                original_blob_path, 1, Image.open(upright_png_path))
-
-        result = payload["pages"][0]
-        child_attachment_id = db.persist_page_v2(
-            document_id,
-            result,
-            page_blob_path=uploaded_blob_path,
-        )
-        _queue_external_claim_for_child(
-            child_attachment_id,
-            external_session,
-            document_id,
-        )
-        tid = result.get("template_match", {}).get("template_id")
-        _finalize_processed_blob(
-            document_id, archived_blob_path, 1, tid, payload["metrics"],
-            payload["pages"])
-        return _build_processed_response(
-            document_id, attachment_name, folder, archived_blob_path,
-            original_blob_path, "image", payload["pages"],
-            payload["metrics"])
-    except Exception as e:
-        _mark_processing_failed(document_id, e)
-        raise
+# Truncated: this used to be the background worker for single-image blobs
+# (image_ocr.py, LLM-based). Retired because neither CV pipeline
+# (v1_computer_vision/v2_computer_vision) has a single-image entry point —
+# only process_pdf(). Single images are now rejected at ingest time by
+# _reject_single_image() before a background task is ever queued, so this
+# should be unreachable; it's kept as a stub (rather than deleted) so a stray
+# direct call still fails loudly instead of silently doing nothing.
+def _process_image_blob(*args, **kwargs):
+    raise RuntimeError(
+        "_process_image_blob is retired: single-image ingestion is no longer "
+        "supported by either CV pipeline. This should be unreachable — "
+        "single-image blobs are rejected earlier, at ingest dispatch time."
+    )
 
 
 def _finalize_processed_blob(document_id: int, blob_path: str, page_count: int,
