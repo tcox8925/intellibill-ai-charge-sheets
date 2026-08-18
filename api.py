@@ -93,6 +93,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Toggle for whether ingest automatically calls create-claim on each child
+# attachment produced during extraction. Set AUTO_CREATE_CLAIMS=false to
+# extract without ever touching the external claims API.
+AUTO_CREATE_CLAIMS = os.environ.get("AUTO_CREATE_CLAIMS", "true").strip().lower() in (
+    "1", "true", "yes", "y", "on",
+)
+
 
 def _client():
     # one client per process; cheap to rebuild if needed
@@ -731,7 +738,7 @@ def _process(attachment_id: int, stem: str,
     archived_blob_path = blob_path
     original_blob_path = original_blob_path or archived_blob_path
     try:
-        external_session = _start_external_claim_session()
+        external_session = _start_external_claim_session() if AUTO_CREATE_CLAIMS else None
         pdf_bytes = storage.download_blob(archived_blob_path)
         parent_attachment = db.get_attachment_by_id(document_id)
         if not parent_attachment:
@@ -752,11 +759,12 @@ def _process(attachment_id: int, stem: str,
                     result,
                     page_blob_path=uploaded_blob_path,
                 )
-                _queue_external_claim_for_child(
-                    child_attachment_id,
-                    external_session,
-                    document_id,
-                )
+                if AUTO_CREATE_CLAIMS:
+                    _queue_external_claim_for_child(
+                        child_attachment_id,
+                        external_session,
+                        document_id,
+                    )
 
             results, metrics = cv_pipeline.process_pdf(
                 pdf_path, _client(), registry,
