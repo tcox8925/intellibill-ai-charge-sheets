@@ -515,6 +515,11 @@ def persist_page_v2(document_id: int, page_result: dict, page_blob_path: str,
             if ERRORED_CHILD_FLAGS.issubset(flags)
             else "G"
         )
+        rotation_degrees = (page_result.get("orientation") or {}).get("applied_rotation_deg")
+        try:
+            rotation_degrees = int(rotation_degrees) if rotation_degrees is not None else 0
+        except (TypeError, ValueError):
+            rotation_degrees = 0
         att_datetime = _current_cst_timestamp()
         created_at = att_datetime
         updated_at = att_datetime
@@ -558,7 +563,7 @@ def persist_page_v2(document_id: int, page_result: dict, page_blob_path: str,
                     parent_attachment.get("practice_id"),
                     1,
                     1,
-                    0,
+                    rotation_degrees,
                     ATTACHMENT_USER_ID,
                     attachment_status,
                     json.dumps(page_result),
