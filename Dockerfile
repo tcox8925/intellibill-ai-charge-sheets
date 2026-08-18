@@ -28,4 +28,10 @@ COPY . .
 
 EXPOSE 8000
 
-CMD ["gunicorn", "api:app", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000", "--timeout", "600"]
+# --access-logfile/--error-logfile are set explicitly (not just relying on
+# Azure's Startup Command override) so request/step logs show up in
+# `docker logs`/App Service log streaming regardless of how the container is
+# launched — an out-of-band Azure Startup Command achieving the same thing
+# was silently reset once already.
+CMD ["gunicorn", "api:app", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000", \
+     "--timeout", "600", "--access-logfile", "-", "--error-logfile", "-", "--log-level", "info"]

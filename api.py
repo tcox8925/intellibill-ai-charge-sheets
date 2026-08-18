@@ -235,6 +235,7 @@ def health_listattachments():
 @app.post("/chargesheet/extract")
 def extract_blob_sync(req: IngestRequest):
     blob_path = _resolve_ingest_target(req)
+    logger.info("Received /chargesheet/extract request for: %s", blob_path)
     if is_processed(blob_path):
         logger.info("Skipping already processed claim file: %s", blob_path)
         return _build_skip_result(blob_path, "already_processed")
@@ -253,6 +254,7 @@ def folders():
 @app.post("/chargesheet/ingest")
 def ingest(req: IngestRequest, bg: BackgroundTasks) -> Union[Dict[str, object], IngestSkipResult]:
     blob_path = _resolve_ingest_target(req)
+    logger.info("Received /chargesheet/ingest request for: %s", blob_path)
     if is_processed(blob_path):
         logger.info("Skipping already processed claim file: %s", blob_path)
         return _build_skip_result(blob_path, "already_processed")
@@ -737,6 +739,7 @@ def _process(attachment_id: int, stem: str,
     document_id = attachment_id
     archived_blob_path = blob_path
     original_blob_path = original_blob_path or archived_blob_path
+    logger.info("Extraction started: document_id=%s blob=%s", document_id, archived_blob_path)
     try:
         external_session = _start_external_claim_session() if AUTO_CREATE_CLAIMS else None
         pdf_bytes = storage.download_blob(archived_blob_path)
@@ -774,10 +777,16 @@ def _process(attachment_id: int, stem: str,
                     for r in results if r.get("template_match", {}).get("template_id")), None)
         _finalize_processed_blob(
             document_id, archived_blob_path, len(results), tid, metrics, results)
+        logger.info(
+            "Extraction complete: document_id=%s pages=%d procedures=%d diagnoses=%d",
+            document_id, len(results), metrics.get("total_procedures", 0),
+            metrics.get("total_diagnoses", 0),
+        )
         return _build_processed_response(
             document_id, attachment_name, folder, archived_blob_path,
             original_blob_path, "pdf", results, metrics)
     except Exception as e:
+        logger.exception("Extraction failed: document_id=%s blob=%s", document_id, archived_blob_path)
         _mark_processing_failed(document_id, e)
         raise
 
