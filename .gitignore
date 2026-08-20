@@ -5,3 +5,5 @@ v1_computer_vision/runtime/header_cache/*.json
 v2_computer_vision/runtime/header_cache/*.json
 v2_2_1_computer_vision/runtime/header_cache/*.json
 v2_2_1_computer_vision/runtime/mark_cache/*.json
+v2_2_1_2_computer_vision/runtime/header_cache/*.json
+v2_2_1_2_computer_vision/runtime/mark_cache/*.json
