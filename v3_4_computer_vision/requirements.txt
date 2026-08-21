@@ -1,0 +1,20 @@
+# Charge-sheet extraction v3 — standalone package
+# Python 3.10+  (tested on 3.11 / 3.12)
+
+# Required
+numpy>=1.26,<3
+opencv-python-headless>=4.9,<5
+Pillow>=10,<13
+anthropic>=0.64,<1
+
+# Required only for the Azure Key Vault -> Foundry credential path.
+# Not needed if you set ANTHROPIC_API_KEY.
+azure-identity>=1.17,<2
+azure-keyvault-secrets>=4.8,<5
+
+# NON-PIP DEPENDENCY: Poppler (provides pdftoppm) must be on PATH.
+#   Windows : https://github.com/oschwartz10612/poppler-windows/releases
+#             unzip, add  <poppler>\Library\bin  to PATH
+#   macOS   : brew install poppler
+#   Debian  : sudo apt-get install poppler-utils
+# Verify with:  python preflight.py

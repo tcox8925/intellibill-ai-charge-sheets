@@ -2,9 +2,9 @@
 api.py — FastAPI service for the charge-sheet pipeline (kept SEPARATE from the
 run.py CLI). It wires the extraction core to blob storage (storage.py) and
 Postgres (db.py). PDF billing-code selection goes through the locked-template
-computer-vision pipeline (v2_2_1_2_computer_vision.pipeline_adapter.process_pdf,
+computer-vision pipeline (v3_4_computer_vision.pipeline_adapter.process_pdf,
 same call shape as run.process_pdf) rather than the LLM. Single-image blobs
-are no longer supported (neither CV pipeline has a single-image entry point)
+are no longer supported (the CV pipeline has no single-image entry point)
 and are rejected with a 400 at ingest time instead of being processed.
 
 Endpoints
@@ -54,7 +54,7 @@ import db
 import external_apis
 import image_ocr
 import run
-from v2_2_1_2_computer_vision import pipeline_adapter as cv_pipeline
+from v3_4_computer_vision import pipeline_adapter as cv_pipeline
 
 app = FastAPI(title="834 Charge-sheet OCR", version="1.0")
 
@@ -536,9 +536,9 @@ def _mark_unsupported_processed(blob_path: str):
 
 
 def _reject_single_image(blob_path: str):
-    # Single-image ingestion is no longer supported: neither CV pipeline
-    # (v1_computer_vision/v2_computer_vision/v2_2_1_computer_vision/v2_2_1_2_computer_vision) has a single-image entry point,
-    # only process_pdf(). Rather than silently mark these processed like a
+    # Single-image ingestion is no longer supported: the CV pipeline
+    # (v3_4_computer_vision) has no single-image entry point, only
+    # process_pdf(). Rather than silently mark these processed like a
     # genuinely unsupported file type, fail loudly so a caller/integration
     # still sending image blobs notices immediately.
     if storage.is_image_path(blob_path):
@@ -729,10 +729,12 @@ def _process(attachment_id: int, stem: str,
              want=None):
     """Background worker: split -> per-page extract -> upload page -> persist.
 
-    Code selection uses the locked-template computer-vision pipeline
-    (v2_2_1_2_computer_vision.pipeline_adapter), not the LLM, per the swap to
-    deterministic geometric detection. registry is accepted for call-shape
-    compatibility but unused by that pipeline (single locked template)."""
+    Code selection uses the locked-template, mark-centric computer-vision
+    pipeline (v3_4_computer_vision.pipeline_adapter), not the LLM directly:
+    physical marks are localized geometrically, then each mark's crop is
+    adjudicated by a vision model restricted to indices into a locked
+    candidate list. registry is accepted for call-shape compatibility but
+    unused by that pipeline (single locked template)."""
     from PIL import Image
     registry = _registry()
     folder = _blob_folder(blob_path)
@@ -792,8 +794,8 @@ def _process(attachment_id: int, stem: str,
 
 
 # Truncated: this used to be the background worker for single-image blobs
-# (image_ocr.py, LLM-based). Retired because neither CV pipeline
-# (v1_computer_vision/v2_computer_vision/v2_2_1_computer_vision/v2_2_1_2_computer_vision) has a single-image entry point —
+# (image_ocr.py, LLM-based). Retired because the CV pipeline
+# (v3_4_computer_vision) has no single-image entry point —
 # only process_pdf(). Single images are now rejected at ingest time by
 # _reject_single_image() before a background task is ever queued, so this
 # should be unreachable; it's kept as a stub (rather than deleted) so a stray

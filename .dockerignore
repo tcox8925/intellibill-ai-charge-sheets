@@ -15,9 +15,4 @@ results.json
 run_metrics_*.json
 chargesheet_documentation.docx
 
-v1_computer_vision/runtime/header_cache/*.json
-v2_computer_vision/runtime/header_cache/*.json
-v2_2_1_computer_vision/runtime/header_cache/*.json
-v2_2_1_computer_vision/runtime/mark_cache/*.json
-v2_2_1_2_computer_vision/runtime/header_cache/*.json
-v2_2_1_2_computer_vision/runtime/mark_cache/*.json
+v3_4_computer_vision/runtime/header_cache_v3/*.json

@@ -3,7 +3,7 @@
 # this image is what replaces it.)
 FROM python:3.11-slim
 
-# poppler-utils -> pdftoppm, used by v1_computer_vision/render.py (locked-template
+# poppler-utils -> pdftoppm, used by v3_4_computer_vision/render.py (locked-template
 #   renderer contract; do not swap for another engine without recalibrating).
 # libglib2.0-0/libsm6/libxext6/libxrender1/libgl1 -> runtime shared libs opencv-python
 #   needs (libGL.so.1 etc.) that are normally present on a desktop OS but missing
