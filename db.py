@@ -88,6 +88,7 @@ def update_attachment(clm_att_path: str, *, new_blob_path: Optional[str] = None,
                       page_count: Optional[int] = None,
                       extracted_files_count: Optional[int] = None,
                       rotation_degrees: Optional[int] = None,
+                      is_archived: Optional[bool] = None,
                       conn=None) -> bool:
     """Update selected attachment fields for the row identified by clm_att_path."""
     assignments = []
@@ -117,6 +118,9 @@ def update_attachment(clm_att_path: str, *, new_blob_path: Optional[str] = None,
     if rotation_degrees is not None:
         assignments.append("rotation_degrees=%s")
         params.append(rotation_degrees)
+    if is_archived is not None:
+        assignments.append("is_archived=%s")
+        params.append(is_archived)
 
     if not assignments:
         return False
@@ -541,10 +545,11 @@ def persist_page_v2(document_id: int, page_result: dict, page_blob_path: str,
                          rotation_degrees,
                          user_id, status,
                          raw_extracted_data, processed_extracted_data,
-                         extraction_metadata, processed, sha, retrieval)
+                         extraction_metadata, processed, sha, retrieval,
+                         category, is_archived)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                         %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb,
-                        %s, %s, %s)
+                        %s, %s, %s, %s, %s)
                     RETURNING id""",
                 (
                     None,
@@ -556,7 +561,7 @@ def persist_page_v2(document_id: int, page_result: dict, page_blob_path: str,
                     updated_at,
                     parent_attachment.get("attachment_type"),
                     document_id,
-                    parent_attachment.get("clm_att_filename"),
+                    parent_attachment.get("original_file_name"),
                     original_file_name,
                     parent_attachment.get("client_id"),
                     parent_attachment.get("group_id"),
@@ -572,6 +577,8 @@ def persist_page_v2(document_id: int, page_result: dict, page_blob_path: str,
                     True,
                     None,
                     "API",
+                    "claims",
+                    False,
                 ),
             )
             row = cur.fetchone()

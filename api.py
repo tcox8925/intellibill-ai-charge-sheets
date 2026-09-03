@@ -405,6 +405,7 @@ def _archive_blob_path(blob_path: str, archive_folder_path: str, *,
         raw_extracted_data=raw_extracted_data,
         page_count=page_count,
         extracted_files_count=extracted_files_count,
+        is_archived=True,
     )
     if not updated:
         raise HTTPException(500, "attachment path update failed")
@@ -425,6 +426,7 @@ def _archive_blob_path(blob_path: str, archive_folder_path: str, *,
             page_count=attachment.get("page_count"),
             extracted_files_count=attachment.get("extracted_files_count"),
             rotation_degrees=attachment.get("rotation_degrees"),
+            is_archived=bool(attachment.get("is_archived")),
         )
         if not rollback_updated:
             raise HTTPException(
