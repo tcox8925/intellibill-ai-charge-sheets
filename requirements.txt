@@ -5,7 +5,11 @@ openai
 # Image and document processing
 pillow
 numpy
-opencv-python
+# Pinned to match every CV pipeline vendor drop's own requirements.txt
+# (v1/v2/v2_2_1/v2_2_1_2_computer_vision) — OpenCV 5.x changes numeric
+# internals enough to shift borderline geometry scores vs. what the vendor
+# tested against.
+opencv-python-headless>=4.9,<5
 scipy
 
 # API layer

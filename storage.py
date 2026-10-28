@@ -19,6 +19,7 @@ reads a connection string from the environment.
 """
 
 import io
+import logging
 import os
 import re
 from typing import Optional
@@ -26,6 +27,8 @@ from PIL import Image
 
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient
+
+logger = logging.getLogger("chargesheet.storage")
 
 # =====================================================================
 # PRACTICE — GLOBAL CONFIG
@@ -117,6 +120,22 @@ def list_claim_files(entity_folder: str,
         claim_files_folder.strip("/"),
     ])
     return list_files(prefix)
+
+
+def list_archive_claim_files() -> list[str]:
+    """Recursively list every file archived under Archive/{entity}/Claims/{date}/."""
+    # logger.info("Starting archive listing: container=%s prefix=Archive/", CONTAINER)
+    cc = _container()
+    prefix = "Archive/"
+    files = []
+    seen = 0
+    for blob in cc.list_blobs(name_starts_with=prefix):
+        seen += 1
+        logger.info("Archive blob seen (%d): %s", seen, blob.name)
+        if not blob.name.endswith("/"):
+            files.append(blob.name)
+    # logger.info("Finished archive listing: %d blobs seen, %d claim files", seen, len(files))
+    return sorted(files)
 
 
 def is_entity_group_folder(folder_name: str) -> bool:

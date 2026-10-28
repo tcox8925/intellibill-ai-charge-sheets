@@ -17,14 +17,16 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, TypedDict
 from zoneinfo import ZoneInfo
 
+from psycopg2.extras import RealDictCursor
+
 from auth import get_kv_client, get_pg_connection, reconnect_if_stale
+from extraction_flags import ERRORED_CHILD_FLAGS
 
 SCHEMA = "wpo"
 EDI_TEBRA_SCHEMA = '"EDI_Tebra"'
 ATTACHMENTS_TABLE = f"{EDI_TEBRA_SCHEMA}.attachments"
 ATTACHMENT_CLM_LOGIN = os.environ["ATTACHMENT_CLM_LOGIN"]
 ATTACHMENT_USER_ID = os.environ["ATTACHMENT_USER_ID"]
-ATTACHMENT_STATUS = "G"
 
 
 JSONDict = Dict[str, Any]
@@ -86,6 +88,7 @@ def update_attachment(clm_att_path: str, *, new_blob_path: Optional[str] = None,
                       page_count: Optional[int] = None,
                       extracted_files_count: Optional[int] = None,
                       rotation_degrees: Optional[int] = None,
+                      is_archived: Optional[bool] = None,
                       conn=None) -> bool:
     """Update selected attachment fields for the row identified by clm_att_path."""
     assignments = []
@@ -115,6 +118,9 @@ def update_attachment(clm_att_path: str, *, new_blob_path: Optional[str] = None,
     if rotation_degrees is not None:
         assignments.append("rotation_degrees=%s")
         params.append(rotation_degrees)
+    if is_archived is not None:
+        assignments.append("is_archived=%s")
+        params.append(is_archived)
 
     if not assignments:
         return False
@@ -136,6 +142,77 @@ def update_attachment(clm_att_path: str, *, new_blob_path: Optional[str] = None,
         if own:
             conn.commit()
         return updated
+    finally:
+        if own:
+            conn.close()
+
+
+def list_unclaimed_g_status_child_ids(conn=None) -> list[int]:
+    """Child (page) attachments still in 'G' status with no successful claim
+    yet. A row whose claim_creation_response records an error is still
+    eligible — only a response without an 'error' key counts as claimed."""
+    own = conn is None
+    conn = conn or _conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""SELECT id
+                      FROM {ATTACHMENTS_TABLE}
+                     WHERE parent_attachment_id IS NOT NULL
+                       AND status = 'G'
+                       AND (claim_creation_response IS NULL
+                            OR claim_creation_response ? 'error')
+                     ORDER BY id"""
+            )
+            return [row[0] for row in cur.fetchall()]
+    finally:
+        if own:
+            conn.close()
+
+
+def record_claim_creation_response(attachment_id: int, response: Any,
+                                   conn=None) -> bool:
+    """Persist the claim-creation API response on a child attachment row,
+    so future create-prof-claim-all sweeps skip it."""
+    own = conn is None
+    conn = conn or _conn()
+    try:
+        updated_at = _current_cst_timestamp()
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""UPDATE {ATTACHMENTS_TABLE}
+                       SET claim_creation_response=%s::jsonb,
+                           updated_at=%s
+                     WHERE id=%s""",
+                (json.dumps(response), updated_at, attachment_id),
+            )
+            updated = cur.rowcount > 0
+        if own:
+            conn.commit()
+        return updated
+    finally:
+        if own:
+            conn.close()
+
+
+def list_unarchived_processed_parents(conn=None) -> list[dict]:
+    """Top-level (non-child) attachments that finished processing but whose
+    blob still isn't sitting under Archive/."""
+    own = conn is None
+    conn = conn or _conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""SELECT id, clm_att_path, clm_att_filename,
+                           original_file_name, status
+                      FROM {ATTACHMENTS_TABLE}
+                     WHERE parent_attachment_id IS NULL
+                       AND processed = true
+                       AND clm_att_path NOT ILIKE 'archive/%'
+                     ORDER BY id"""
+            )
+            cols = [desc[0] for desc in cur.description]
+            return [dict(zip(cols, row)) for row in cur.fetchall()]
     finally:
         if own:
             conn.close()
@@ -436,10 +513,21 @@ def persist_page_v2(document_id: int, page_result: dict, page_blob_path: str,
             page_result, page_blob_path)
         page_file_name = os.path.basename(page_blob_path)
         original_file_name = page_file_name.rsplit("_", 1)[-1]
+        flags = set(page_result.get("flags", []) or [])
+        attachment_status = (
+            "E"
+            if ERRORED_CHILD_FLAGS.issubset(flags)
+            else "G"
+        )
+        rotation_degrees = (page_result.get("orientation") or {}).get("applied_rotation_deg")
+        try:
+            rotation_degrees = int(rotation_degrees) if rotation_degrees is not None else 0
+        except (TypeError, ValueError):
+            rotation_degrees = 0
         att_datetime = _current_cst_timestamp()
         created_at = att_datetime
         updated_at = att_datetime
-        with conn.cursor() as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 f"""DELETE FROM {ATTACHMENTS_TABLE}
                      WHERE parent_attachment_id=%s
@@ -457,10 +545,11 @@ def persist_page_v2(document_id: int, page_result: dict, page_blob_path: str,
                          rotation_degrees,
                          user_id, status,
                          raw_extracted_data, processed_extracted_data,
-                         extraction_metadata, processed, sha)
+                         extraction_metadata, processed, sha, retrieval,
+                         category, is_archived)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                         %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb,
-                        %s, %s)
+                        %s, %s, %s, %s, %s)
                     RETURNING id""",
                 (
                     None,
@@ -472,27 +561,32 @@ def persist_page_v2(document_id: int, page_result: dict, page_blob_path: str,
                     updated_at,
                     parent_attachment.get("attachment_type"),
                     document_id,
-                    parent_attachment.get("clm_att_filename"),
+                    parent_attachment.get("original_file_name"),
                     original_file_name,
                     parent_attachment.get("client_id"),
                     parent_attachment.get("group_id"),
                     parent_attachment.get("practice_id"),
                     1,
                     1,
-                    0,
+                    rotation_degrees,
                     ATTACHMENT_USER_ID,
-                    ATTACHMENT_STATUS,
+                    attachment_status,
                     json.dumps(page_result),
                     json.dumps(processed_payload),
                     json.dumps(metadata_payload),
                     True,
                     None,
+                    "API",
+                    "claims",
+                    False,
                 ),
             )
             row = cur.fetchone()
         if own:
             conn.commit()
-        return row[0]
+        if row is None:
+            raise ValueError("child attachment insert did not return an id")
+        return int(row["id"])
     finally:
         if own:
             conn.close()

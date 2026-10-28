@@ -16,6 +16,9 @@ from catalog_paths import catalog_output_path
 from extract import (extract_page, identify_page, load_page_b64,
                      detect_orientation, clockwise_restoration_rotation)
 from fingerprint import STRONG, _norm
+from extraction_flags import (FLAG_NOT_CHARGESHEET, FLAG_SKIPPED_NO_EXTRACTION,
+                              FLAG_BLANK_HEADER, FLAG_TEMPLATE_MISMATCH,
+                              TEMPLATE_STATE_NOT_CHARGESHEET)
 import run
 
 
@@ -82,8 +85,8 @@ def process_image(image_path: str, client=None, registry=None,
                     "seen_sections": seen_labels,
                     "seen_codes_sample": (seen_codes or [])[:8],
                 },
-                "flags": ["not_chargesheet", "skipped_no_extraction"],
-                "template_match": {"state": "not_chargesheet", "score": round(score, 2)},
+                "flags": [FLAG_NOT_CHARGESHEET, FLAG_SKIPPED_NO_EXTRACTION, FLAG_BLANK_HEADER],
+                "template_match": {"state": TEMPLATE_STATE_NOT_CHARGESHEET, "score": round(score, 2)},
             }
             return {
                 "source_file": os.path.basename(image_path),
@@ -138,12 +141,12 @@ def process_image(image_path: str, client=None, registry=None,
             "raw_detected_deg": raw_rotation,
         }
         if result.get("template_ok") is False:
-            result.setdefault("flags", []).append("template_mismatch")
+            result.setdefault("flags", []).append(FLAG_TEMPLATE_MISMATCH)
         header = result.get("header", {}) or {}
         for flag in run.check_dates(header):
             result.setdefault("flags", []).append(flag)
         if not any(((header.get("name") or "").strip(), (header.get("dob") or "").strip())):
-            result.setdefault("flags", []).append("blank_header")
+            result.setdefault("flags", []).append(FLAG_BLANK_HEADER)
         result["page"] = 1
 
     payload = {

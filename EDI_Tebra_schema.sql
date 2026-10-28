@@ -25,6 +25,13 @@ CREATE TABLE "EDI_Tebra".attachments (
     page_count int4 NULL,
     extracted_files_count int4 NULL,
     rotation_degrees int4 NULL,
+    upload_source text NULL,
+    associated_claim_dcn varchar(100) NULL,
+    claim_creation_response jsonb NULL,
+    retrieval text NULL,
+    document_dcn varchar(100) NULL,
+    category varchar(20) NULL,
+    is_archived bool NULL,
     CONSTRAINT claim_attachments_pkey PRIMARY KEY (id),
     CONSTRAINT attachments_assigned_to_id_fkey FOREIGN KEY (assigned_to_id) REFERENCES rcm.users(id),
     CONSTRAINT attachments_client_id_fkey FOREIGN KEY (client_id) REFERENCES "EDI_Tebra".client(client_id) ON DELETE CASCADE,
@@ -32,3 +39,10 @@ CREATE TABLE "EDI_Tebra".attachments (
     CONSTRAINT attachments_parent_attachment_id_attachments_id_fk FOREIGN KEY (parent_attachment_id) REFERENCES "EDI_Tebra".attachments(id),
     CONSTRAINT attachments_practice_id_fkey FOREIGN KEY (practice_id) REFERENCES "EDI_Tebra".practice(id) ON DELETE CASCADE
 );
+
+-- Table Triggers
+
+create trigger tr_generate_document_dcn before
+insert
+    on
+    "EDI_Tebra".attachments for each row execute function fn_generate_document_dcn_trigger();
