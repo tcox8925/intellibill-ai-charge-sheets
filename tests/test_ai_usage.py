@@ -8,6 +8,7 @@ import os
 import sys
 import threading
 import unittest
+from unittest import mock
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import anthropic
@@ -66,10 +67,9 @@ class AiUsageTest(unittest.TestCase):
 
     def setUp(self):
         IntellibillStub.received.clear()
-        self.addCleanup(setattr, ai_usage, "INGEST_URL", ai_usage.INGEST_URL)
-        self.addCleanup(setattr, ai_usage, "INGEST_API_KEY", ai_usage.INGEST_API_KEY)
-        ai_usage.INGEST_URL = self.url
-        ai_usage.INGEST_API_KEY = "secret"
+        settings = mock.patch.dict(os.environ, {"AI_USAGE_INGEST_URL": self.url, "AI_USAGE_INGEST_API_KEY": "secret"})
+        settings.start()
+        self.addCleanup(settings.stop)
 
     def test_a_document_posts_its_calls_once_when_it_finishes(self):
         client = ai_usage.record_usage_of(claude_client())
@@ -114,12 +114,18 @@ class AiUsageTest(unittest.TestCase):
         self.assertEqual(len(IntellibillStub.received[0]["body"]["events"]), 1)
 
     def test_nothing_is_sent_until_both_settings_are_set(self):
-        ai_usage.INGEST_API_KEY = ""
+        os.environ["AI_USAGE_INGEST_API_KEY"] = ""
         ask(ai_usage.record_usage_of(claude_client()))
         self.assertEqual(IntellibillStub.received, [])
 
+    def test_settings_are_read_when_sending_not_at_import(self):
+        # api.py imports ai_usage before auth.py loads .env.
+        os.environ["AI_USAGE_INGEST_API_KEY"] = "loaded-later"
+        ask(ai_usage.record_usage_of(claude_client()))
+        self.assertEqual(IntellibillStub.received[0]["key"], "loaded-later")
+
     def test_intellibill_being_down_never_fails_the_extraction(self):
-        ai_usage.INGEST_URL = "http://127.0.0.1:9/api/ai-usage/events"
+        os.environ["AI_USAGE_INGEST_URL"] = "http://127.0.0.1:9/api/ai-usage/events"
         client = ai_usage.record_usage_of(claude_client())
         usage = ai_usage.DocumentUsage(9)
         ask(client)

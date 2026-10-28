@@ -33,9 +33,6 @@ from urllib import request
 
 logger = logging.getLogger("chargesheet.ai_usage")
 
-INGEST_URL = os.environ.get("AI_USAGE_INGEST_URL", "").strip()
-INGEST_API_KEY = os.environ.get("AI_USAGE_INGEST_API_KEY", "").strip()
-
 PROCESS = "chargesheet_extraction"
 SOURCE = "chargesheet_ingest"
 # intellibill accepts at most this many events per request.
@@ -47,8 +44,17 @@ _current_events: contextvars.ContextVar[Optional[list]] = contextvars.ContextVar
     "ai_usage_events", default=None)
 
 
+# Read when sending, not at import - api.py imports this before auth.py loads .env.
+def _ingest_url() -> str:
+    return os.environ.get("AI_USAGE_INGEST_URL", "").strip()
+
+
+def _ingest_api_key() -> str:
+    return os.environ.get("AI_USAGE_INGEST_API_KEY", "").strip()
+
+
 def enabled() -> bool:
-    return bool(INGEST_URL and INGEST_API_KEY)
+    return bool(_ingest_url() and _ingest_api_key())
 
 
 def record_usage_of(client):
@@ -137,9 +143,9 @@ def _post(events: list):
         batch = events[start:start + MAX_EVENTS_PER_REQUEST]
         try:
             req = request.Request(
-                INGEST_URL,
+                _ingest_url(),
                 data=json.dumps({"source": SOURCE, "events": batch}).encode("utf-8"),
-                headers={"content-type": "application/json", "x-ai-usage-key": INGEST_API_KEY},
+                headers={"content-type": "application/json", "x-ai-usage-key": _ingest_api_key()},
                 method="POST",
             )
             with request.urlopen(req, timeout=POST_TIMEOUT_SECONDS) as resp:
