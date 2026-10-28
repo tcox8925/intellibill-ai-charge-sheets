@@ -48,6 +48,7 @@ from fastapi import FastAPI, BackgroundTasks, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, model_validator
 
+import ai_usage
 import auth
 import storage
 import db
@@ -102,9 +103,10 @@ AUTO_CREATE_CLAIMS = os.environ.get("AUTO_CREATE_CLAIMS", "true").strip().lower(
 
 
 def _client():
-    # one client per process; cheap to rebuild if needed
+    # one client per process; cheap to rebuild if needed. Every call through it
+    # is reported to intellibill's AI Insights (ai_usage.py).
     if not hasattr(_client, "_c"):
-        _client._c = run.make_client()
+        _client._c = ai_usage.record_usage_of(run.make_client())
     return _client._c
 
 
@@ -744,6 +746,7 @@ def _process(attachment_id: int, stem: str,
     archived_blob_path = blob_path
     original_blob_path = original_blob_path or archived_blob_path
     logger.info("Extraction started: document_id=%s blob=%s", document_id, archived_blob_path)
+    usage = ai_usage.DocumentUsage(document_id)
     try:
         external_session = _start_external_claim_session() if AUTO_CREATE_CLAIMS else None
         pdf_bytes = storage.download_blob(archived_blob_path)
@@ -751,6 +754,7 @@ def _process(attachment_id: int, stem: str,
         if not parent_attachment:
             raise HTTPException(404, f"attachment not found: id={document_id}")
         attachment_name = parent_attachment.get("clm_att_filename")
+        usage.client_id = parent_attachment.get("client_id")
         with tempfile.TemporaryDirectory() as tmp:
             pdf_path = os.path.join(tmp, "src.pdf")
             with open(pdf_path, "wb") as f:
@@ -793,6 +797,8 @@ def _process(attachment_id: int, stem: str,
         logger.exception("Extraction failed: document_id=%s blob=%s", document_id, archived_blob_path)
         _mark_processing_failed(document_id, e)
         raise
+    finally:
+        usage.report()
 
 
 # Truncated: this used to be the background worker for single-image blobs
